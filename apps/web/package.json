@@ -10,24 +10,25 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.2.7",
+    "@grc/config": "workspace:*",
+    "@grc/types": "workspace:*",
+    "@grc/ui": "workspace:*",
+    "@sentry/nextjs": "^10.51.0",
+    "@tanstack/react-query": "^5.100.9",
+    "lucide-react": "^0.469.0",
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "@clerk/nextjs": "^7.2.7",
-    "@tanstack/react-query": "^5.100.9",
-    "zustand": "^5.0.0",
-    "lucide-react": "^0.469.0",
-    "@grc/config": "workspace:*",
-    "@grc/types": "workspace:*",
-    "@grc/ui": "workspace:*"
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
-    "typescript": "^5.6.0",
-    "tailwindcss": "^4.0.0",
-    "@tailwindcss/postcss": "^4.0.0",
     "eslint": "^9.0.0",
-    "eslint-config-next": "^15.1.0"
+    "eslint-config-next": "^15.1.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.6.0"
   }
 }

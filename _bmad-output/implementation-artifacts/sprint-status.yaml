@@ -49,7 +49,7 @@ development_status:
   1-3-clerk-authentication-integration-core-rbac: review
   1-4-nextjs-app-shell-bff-proxy-user-management: review
   1-5-design-token-system-shared-component-library-foundation: review
-  1-6-cicd-pipeline-observability-cross-tenant-regression-tests: backlog
+  1-6-cicd-pipeline-observability-cross-tenant-regression-tests: review
   epic-1-retrospective: optional
 
   # ─── Epic 2: AI-Native Onboarding & Compliance Framework Library ─────────────

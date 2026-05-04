@@ -8,27 +8,29 @@
     "start": "node dist/server.js",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:integration": "vitest run tests/integration/"
   },
   "dependencies": {
-    "fastify": "^5.0.0",
+    "@clerk/backend": "^3.4.4",
+    "@clerk/fastify": "^3.1.22",
     "@fastify/cors": "^10.0.0",
     "@fastify/rate-limit": "^10.0.0",
-    "@clerk/fastify": "^3.1.22",
-    "@clerk/backend": "^3.4.4",
-    "svix": "^1.92.2",
-    "fastify-raw-body": "^5.0.0",
-    "ioredis": "^5.0.0",
-    "fastify-plugin": "^5.0.0",
     "@grc/config": "workspace:*",
     "@grc/db": "workspace:*",
-    "@grc/types": "workspace:*"
+    "@grc/types": "workspace:*",
+    "@sentry/node": "^10.51.0",
+    "fastify": "^5.0.0",
+    "fastify-plugin": "^5.0.0",
+    "fastify-raw-body": "^5.0.0",
+    "ioredis": "^5.0.0",
+    "svix": "^1.92.2"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
     "@types/ioredis": "^4.28.10",
-    "typescript": "^5.6.0",
+    "@types/node": "^22.0.0",
     "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   }
 }

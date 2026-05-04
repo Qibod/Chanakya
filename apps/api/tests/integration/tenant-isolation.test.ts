@@ -2,13 +2,12 @@
  * Integration tests: cross-tenant isolation and audit log permission enforcement.
  * Requires a running PostgreSQL instance (docker compose up -d).
  *
- * Skipped automatically when DATABASE_URL is not set or CI=true.
+ * Skipped automatically when DATABASE_URL is not set.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { prisma, provisionTenantSchema, tenantSchemaName, createTenantClient } from "@grc/db";
 
-const hasDb =
-  Boolean(process.env["DATABASE_URL"]) && process.env["CI"] !== "true";
+const hasDb = Boolean(process.env["DATABASE_URL"]);
 
 const describeWithDb = hasDb ? describe : describe.skip;
 

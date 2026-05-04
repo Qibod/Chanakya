@@ -1,4 +1,7 @@
+import "./instrument.js";
+
 import Fastify from "fastify";
+import * as Sentry from "@sentry/node";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
 import { clerkPlugin } from "@clerk/fastify";
@@ -12,14 +15,21 @@ import { userRoutes } from "./routes/users.js";
 const fastify = Fastify({
   logger: {
     level: process.env["LOG_LEVEL"] ?? "info",
-    transport:
-      process.env["NODE_ENV"] === "development"
-        ? { target: "pino-pretty" }
-        : undefined,
+    ...(process.env["NODE_ENV"] === "development"
+      ? { transport: { target: "pino-pretty" } }
+      : {
+          formatters: {
+            level: (label: string) => ({ severity: label.toUpperCase() }),
+          },
+          messageKey: "message",
+        }),
   },
 });
 
 async function buildServer() {
+  // Register Sentry error handler before all plugins
+  Sentry.setupFastifyErrorHandler(fastify);
+
   // Plugins
   await fastify.register(cors, {
     origin: process.env["ALLOWED_ORIGINS"]?.split(",") ?? ["http://localhost:3000"],
@@ -47,12 +57,19 @@ async function buildServer() {
   // Health check — no auth required
   fastify.get("/health", async () => ({ status: "ok", version: "1.0.0" }));
 
-  // authenticate → tenantMiddleware applied to all /v1/* routes
+  // authenticate → tenantMiddleware → tenant context binding for all /v1/* routes
   fastify.addHook("preHandler", async (request, reply) => {
     if (request.url.startsWith("/v1/")) {
       await authenticate(request, reply);
       if (!reply.sent) {
         await tenantMiddleware(request, reply);
+        // Bind tenant + actor to the request logger for structured GCP Cloud Logging
+        if (!reply.sent && request.tenant) {
+          request.log = request.log.child({
+            tenantId: request.tenant.tenantId,
+            actor: request.user?.userId,
+          });
+        }
       }
     }
   });
@@ -71,7 +88,7 @@ async function start() {
     const server = await buildServer();
     const port = Number(process.env["PORT"] ?? 3001);
     await server.listen({ port, host: "0.0.0.0" });
-    console.log(`API server listening on port ${port}`);
+    server.log.info(`API server listening on port ${port}`);
   } catch (err) {
     fastify.log.error(err);
     process.exit(1);

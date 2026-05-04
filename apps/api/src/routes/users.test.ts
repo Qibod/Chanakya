@@ -110,8 +110,8 @@ describe("GET /v1/users", () => {
     expect(res.statusCode).toBe(200);
     const body = res.json<{ data: Array<{ id: string; role: string; active: boolean }> }>();
     expect(body.data).toHaveLength(2);
-    expect(body.data[0].id).toBe("user_1");
-    expect(body.data[1].active).toBe(false);
+    expect(body.data[0]!.id).toBe("user_1");
+    expect(body.data[1]!.active).toBe(false);
   });
 });
 
