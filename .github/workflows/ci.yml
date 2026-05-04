@@ -1,0 +1,34 @@
+# CI Pipeline — fully implemented in Story 1.6
+# This stub establishes the file location per architecture spec (ARCH-11)
+#
+# Story 1.6 will add:
+#   - pnpm lint (zero errors gate)
+#   - pnpm test
+#   - axe-core accessibility checks
+#   - Turbo remote cache via Vercel
+#   - Cross-tenant isolation regression tests (block deployment on any failure)
+
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  ci:
+    name: Lint & Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm type-check
+      - run: pnpm lint

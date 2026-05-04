@@ -1,0 +1,33 @@
+// Prisma Schema — GRC Platform
+// Public schema contains only: platform_audit_logs (append-only)
+// Tenant-scoped tables live in per-tenant schemas (tenant_{uuid}) — see tenant-template.prisma
+//
+// ARCH-3: platform_audit_logs is the FIRST migration (public schema, append-only)
+// ARCH-4: control_health_snapshots append-only table added in tenant schema in Story 1.2
+// ARCH-5: All BU-scoped tables get nullable business_unit_id from Story 1.2
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Append-only platform audit log — public schema, no UPDATE/DELETE grants
+// Created as FIRST migration before any tenant schemas (ARCH-3)
+model PlatformAuditLog {
+  id           String   @id @default(cuid())
+  tenantId     String   @map("tenant_id")
+  actorId      String   @map("actor_id")
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String   @map("resource_id")
+  ipAddress    String?  @map("ip_address")
+  occurredAt   DateTime @default(now()) @map("occurred_at")
+
+  @@index([tenantId])
+  @@index([occurredAt])
+  @@map("platform_audit_logs")
+}

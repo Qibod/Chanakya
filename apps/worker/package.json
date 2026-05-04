@@ -1,0 +1,25 @@
+{
+  "name": "@grc/worker",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/index.js",
+    "lint": "eslint src/",
+    "type-check": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@grc/config": "workspace:*",
+    "@grc/db": "workspace:*",
+    "@grc/types": "workspace:*",
+    "@grc/ai": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.6.0",
+    "tsx": "^4.0.0",
+    "vitest": "^2.0.0"
+  }
+}

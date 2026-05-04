@@ -1,0 +1,3 @@
+-- Indexes already created in 20260504000000_init_platform_audit_log migration SQL.
+-- This migration exists to align Prisma's schema tracking with the declared @@index directives.
+-- No SQL needed: indexes exist in the database already.

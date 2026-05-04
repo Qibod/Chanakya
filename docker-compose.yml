@@ -1,0 +1,60 @@
+services:
+  # Local PostgreSQL — used for local development and integration tests.
+  # Runs on 5434 to avoid conflict with any local Postgres on 5432.
+  # DATABASE_URL=postgresql://grc:grc@localhost:5434/grc
+  postgres:
+    image: postgres:16-alpine
+    ports:
+      - "5434:5432"
+    environment:
+      POSTGRES_USER: grc
+      POSTGRES_PASSWORD: grc
+      POSTGRES_DB: grc
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U grc -d grc"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Cloud SQL Proxy — connects to GCP Cloud SQL instance.
+  # Requires CLOUD_SQL_CONNECTION_NAME and GOOGLE_APPLICATION_CREDENTIALS in .env
+  # Usage: docker compose --profile gcp up -d
+  cloud-sql-proxy:
+    profiles: ["gcp"]
+    image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:latest
+    command:
+      - "--address=0.0.0.0"
+      - "--port=5433"
+      - "${CLOUD_SQL_CONNECTION_NAME}"
+    ports:
+      - "5433:5433"
+    volumes:
+      - "${GOOGLE_APPLICATION_CREDENTIALS:-/dev/null}:/config/sa-key.json:ro"
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /config/sa-key.json
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "5433"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis — Memorystore-compatible local instance.
+  # Used for: session cache, dashboard health (30s TTL), rate limiting, job progress, pub/sub
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres-data:
+  redis-data:

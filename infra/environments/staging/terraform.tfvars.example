@@ -1,0 +1,8 @@
+# Copy to terraform.tfvars and fill in values before running terraform apply
+# NEVER commit terraform.tfvars — it is in .gitignore
+
+project_id            = "grc-staging-XXXX"
+region                = "us-central1"
+# EU data residency: region = "europe-west1"   (ARCH-12 — only tfvars change needed)
+db_password           = "CHANGE_ME_BEFORE_APPLY"
+service_account_email = "grc-api@grc-staging-XXXX.iam.gserviceaccount.com"

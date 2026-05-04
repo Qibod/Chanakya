@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+.next/
+out/
+build/
+*.tsbuildinfo
+
+# Turbo cache
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.production
+.env.*.local
+
+# GCP credentials — never commit
+*.json
+!package.json
+!tsconfig*.json
+!turbo.json
+!**/tsconfig*.json
+
+# Terraform state — sensitive, store in GCS backend
+infra/**/*.tfstate
+infra/**/*.tfstate.backup
+infra/**/.terraform/
+infra/**/*.tfvars
+!infra/**/*.tfvars.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Test coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*

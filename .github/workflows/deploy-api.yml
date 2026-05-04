@@ -1,0 +1,21 @@
+# API Deploy Pipeline — fully implemented in Story 1.6
+# Builds @grc/api → Docker image → deploys to Cloud Run
+# Runs Prisma migrations before Cloud Run service update (zero-downtime rolling deploy)
+
+name: Deploy API
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - "packages/db/**"
+      - "packages/types/**"
+
+jobs:
+  deploy:
+    name: Build & Deploy API
+    runs-on: ubuntu-latest
+    # Full implementation in Story 1.6
+    steps:
+      - run: echo "Deploy pipeline stub — implemented in Story 1.6"

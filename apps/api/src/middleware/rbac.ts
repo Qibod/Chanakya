@@ -1,0 +1,4 @@
+// requireRole() preHandler factory — implemented in Story 1.3
+// Usage: fastify.get('/v1/route', { preHandler: [authenticate, requireRole('AuditDirector')] }, handler)
+
+export {};

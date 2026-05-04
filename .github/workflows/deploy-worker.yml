@@ -1,0 +1,20 @@
+# Worker Deploy Pipeline — fully implemented in Story 1.6
+# Builds @grc/worker → Docker image → deploys to Cloud Run Jobs
+
+name: Deploy Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/worker/**"
+      - "packages/db/**"
+      - "packages/ai/**"
+
+jobs:
+  deploy:
+    name: Build & Deploy Worker
+    runs-on: ubuntu-latest
+    # Full implementation in Story 1.6
+    steps:
+      - run: echo "Worker deploy stub — implemented in Story 1.6"

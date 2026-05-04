@@ -1,0 +1,26 @@
+// Tenant schema template — DOCUMENTATION REFERENCE ONLY
+// The authoritative DDL is: packages/db/src/migrations/tenant-template.sql
+// Applied via provisionTenantSchema() in packages/db/src/provision-tenant.ts
+//
+// ARCH-2: Each tenant gets schema tenant_{uuid_no_hyphens}
+// ARCH-4: control_health_snapshots is append-only (data collected from day 1; Time Machine UI in Phase 3)
+// ARCH-5: All BU-scoped tables include nullable business_unit_id (single-BU tenants use null)
+// ARCH-7: audit_access_tokens — custom UUID v7 token model for external auditors
+//
+// Tables in every tenant schema (14 total):
+//   tenants                    — tenant metadata (name, tier, region)
+//   users                      — Clerk user profiles, synced via webhook
+//   role_assignments  ★BU      — user_id + role + business_unit_id UNIQUE
+//   framework_activations      — active compliance frameworks
+//   control_items     ★BU      — framework, control_code, name, status, assigned_to
+//   control_health_snapshots   — ARCH-4 append-only: id, tenant_id, control_id, status, score, recorded_at
+//   evidence_blobs             — content-addressed (SHA-256 hash UNIQUE), write-once
+//   evidence_items    ★BU      — FK control_items + evidence_blobs; is_current BOOLEAN
+//   fingerprint_results        — AI fingerprinting output JSONB
+//   audit_engagements ★BU      — scope_confirmed_at, scope_confirmed_by
+//   audit_access_tokens        — ARCH-7: audit_id, scoped_control_ids[], expires_at, revoked_at
+//   risk_items        ★BU      — likelihood, impact, status, owner_id
+//   findings          ★BU      — audit_id FK, severity, due_date
+//   integration_configs ★BU    — provider, status, config JSONB, last_synced_at
+//
+// ★BU = has nullable business_unit_id (ARCH-5)
