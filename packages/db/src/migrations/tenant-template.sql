@@ -26,6 +26,7 @@ CREATE TABLE users (
     id          TEXT        NOT NULL,   -- Clerk user ID (e.g. user_abc123)
     email       TEXT        NOT NULL,
     name        TEXT,
+    active      BOOLEAN     NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT users_pkey    PRIMARY KEY (id),
@@ -224,6 +225,8 @@ CREATE TABLE integration_configs (
 -- ---------------------------------------------------------------------------
 -- Indexes
 -- ---------------------------------------------------------------------------
+CREATE INDEX idx_users_inactive            ON users(active) WHERE active = FALSE;
+
 CREATE INDEX idx_control_items_status      ON control_items(status);
 CREATE INDEX idx_control_items_framework   ON control_items(framework);
 CREATE INDEX idx_control_items_assigned_to ON control_items(assigned_to);

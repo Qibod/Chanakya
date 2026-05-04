@@ -1,7 +1,13 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
 import rateLimit from "@fastify/rate-limit";
+import { clerkPlugin } from "@clerk/fastify";
+import rawBody from "fastify-raw-body";
+import { authenticate } from "./middleware/auth.js";
 import { tenantMiddleware } from "./middleware/tenant.js";
+import redisPlugin from "./plugins/redis.js";
+import { clerkWebhookRoutes } from "./routes/webhooks/clerk.js";
+import { userRoutes } from "./routes/users.js";
 
 const fastify = Fastify({
   logger: {
@@ -24,19 +30,38 @@ async function buildServer() {
     timeWindow: "1 minute",
   });
 
-  // Health check — no tenant context required
+  // Clerk JWT verification
+  await fastify.register(clerkPlugin);
+
+  // Raw body for webhook signature verification (opt-in per route)
+  await fastify.register(rawBody, {
+    field: "rawBody",
+    global: false,
+    encoding: "utf8",
+    runFirst: true,
+  });
+
+  // Redis plugin (lazy-connect, no-op if Redis unavailable)
+  await fastify.register(redisPlugin);
+
+  // Health check — no auth required
   fastify.get("/health", async () => ({ status: "ok", version: "1.0.0" }));
 
-  // Tenant middleware applied to all /v1/* routes (ARCH-2)
-  // TODO Story 1.3: tenant resolution moves to JWT extraction; hook remains
+  // authenticate → tenantMiddleware applied to all /v1/* routes
   fastify.addHook("preHandler", async (request, reply) => {
     if (request.url.startsWith("/v1/")) {
-      return tenantMiddleware(request, reply);
+      await authenticate(request, reply);
+      if (!reply.sent) {
+        await tenantMiddleware(request, reply);
+      }
     }
   });
 
-  // Routes registered in subsequent stories (1.3–1.6)
-  // fastify.register(controlsRoutes, { prefix: "/v1" });
+  // Webhook routes — outside /v1/* auth chain (verified by svix signature)
+  await fastify.register(clerkWebhookRoutes);
+
+  // API routes
+  await fastify.register(userRoutes);
 
   return fastify;
 }

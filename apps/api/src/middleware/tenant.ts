@@ -1,47 +1,62 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
-import type { TenantContext, TenantId } from "@grc/types";
-import { tenantSchemaName } from "@grc/db";
+import type { TenantContext, TenantId, SubscriptionTier, UserRole } from "@grc/types";
+import { tenantSchemaName, prisma } from "@grc/db";
 
-// Augment Fastify's Request type so every handler has request.tenant
 declare module "fastify" {
   interface FastifyRequest {
     tenant: TenantContext;
   }
 }
 
-// Simple UUID v4 format check (sufficient for tenant ID validation)
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 /**
- * Populates request.tenant from the validated tenant context.
+ * Populates request.tenant from the Clerk JWT org context (request.user.orgId)
+ * and updates request.user.role with the value from role_assignments DB lookup.
  *
- * Story 1.2 (dev stub): reads tenantId from x-tenant-id header.
- * TODO Story 1.3: replace with JWT-based tenant resolution from Clerk session.
- *                 The x-tenant-id header must NOT be trusted in production.
+ * Must run AFTER authenticate middleware, which sets request.user.orgId.
  *
- * Returns 400 if tenantId is absent or not a valid UUID.
+ * Returns 400 if orgId is absent (authenticate middleware did not run or no org context).
+ *
+ * TODO Story 1.6: cache tier + role in Redis (key: rbac:{tenantId}:{userId}, TTL 300s).
  */
 export async function tenantMiddleware(
   request: FastifyRequest,
   reply: FastifyReply
 ): Promise<void> {
-  // TODO Story 1.3: extract tenantId from Clerk JWT claims, not from header
-  const raw = request.headers["x-tenant-id"];
-  const tenantId = Array.isArray(raw) ? raw[0] : raw;
+  const tenantId = (request as unknown as { user?: { orgId?: string } }).user?.orgId;
 
-  if (!tenantId || !UUID_RE.test(tenantId)) {
+  if (!tenantId) {
     return reply.code(400).send({
       error: {
         code: "TENANT_REQUIRED",
-        message: "Valid tenant context is required",
+        message: "Tenant context missing",
       },
     });
   }
 
+  const schema = tenantSchemaName(tenantId as TenantId);
+  const userId = (request as unknown as { user?: { userId?: string } }).user?.userId ?? "";
+
+  const [tierRows, roleRows] = await Promise.all([
+    (prisma.$queryRawUnsafe as (sql: string, ...args: unknown[]) => Promise<Array<{ tier: string }>>)(
+      `SELECT tier FROM "${schema}".tenants WHERE id = $1 LIMIT 1`,
+      tenantId
+    ),
+    (prisma.$queryRawUnsafe as (sql: string, ...args: unknown[]) => Promise<Array<{ role: string }>>)(
+      `SELECT role FROM "${schema}".role_assignments WHERE user_id = $1 AND business_unit_id IS NULL ORDER BY created_at ASC LIMIT 1`,
+      userId
+    ),
+  ]);
+
+  const tier = (tierRows[0]?.tier ?? "starter") as SubscriptionTier;
+  const role = (roleRows[0]?.role ?? "ReadOnly") as UserRole;
+
+  if (request.user) {
+    request.user = { ...request.user, role };
+  }
+
   request.tenant = {
     tenantId: tenantId as TenantId,
-    tier: "starter", // TODO Story 1.3: read from JWT / DB
-    schemaName: tenantSchemaName(tenantId as TenantId),
+    tier,
+    schemaName: schema,
   };
 }

@@ -15,6 +15,17 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Maps Clerk user IDs to their GRC tenant IDs for user.deleted webhook handling
+// (Clerk's user.deleted payload has no orgId)
+model UserTenantMap {
+  userId   String @map("user_id")
+  tenantId String @map("tenant_id")
+
+  @@id([userId, tenantId])
+  @@index([userId])
+  @@map("user_tenant_map")
+}
+
 // Append-only platform audit log — public schema, no UPDATE/DELETE grants
 // Created as FIRST migration before any tenant schemas (ARCH-3)
 model PlatformAuditLog {

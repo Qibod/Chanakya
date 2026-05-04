@@ -1,82 +1,108 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import Fastify, { type FastifyInstance } from "fastify";
+
+// Mock DB — tenant middleware does DB lookups for tier + role
+vi.mock("@grc/db", () => ({
+  tenantSchemaName: (id: string) => `tenant_${id.replace(/-/g, "")}`,
+  prisma: {
+    $queryRawUnsafe: vi.fn(),
+  },
+}));
+
+import { prisma } from "@grc/db";
 import { tenantMiddleware } from "./tenant.js";
+import type { UserContext } from "@grc/types";
 
-const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
+const mockQuery = vi.mocked(prisma.$queryRawUnsafe);
 
-function buildTestApp(): FastifyInstance {
+const VALID_ORG_ID = "org_550e8400e29b41d4a716446655440000";
+const VALID_USER_ID = "user_abc123";
+
+function buildTestApp(userContext?: Partial<UserContext>): FastifyInstance {
   const app = Fastify({ logger: false });
+
+  // Simulate authenticate middleware having run
+  app.addHook("preHandler", async (request) => {
+    if (userContext !== undefined) {
+      (request as unknown as { user: UserContext }).user = {
+        userId: VALID_USER_ID,
+        orgId: VALID_ORG_ID,
+        role: "ControlOwner",
+        sessionId: "sess_test",
+        ...userContext,
+      } as UserContext;
+    }
+  });
+
   app.addHook("preHandler", tenantMiddleware);
   app.get("/v1/test", async (request) => ({
     tenantId: request.tenant.tenantId,
     schemaName: request.tenant.schemaName,
     tier: request.tenant.tier,
+    role: request.user.role,
   }));
   return app;
 }
 
-describe("tenantMiddleware", () => {
-  let app: FastifyInstance;
+beforeEach(() => {
+  vi.resetAllMocks();
+  // Default DB returns: tier=starter, role=ControlOwner
+  mockQuery
+    .mockResolvedValueOnce([{ tier: "starter" }])   // tenants table lookup
+    .mockResolvedValueOnce([{ role: "AuditDirector" }]); // role_assignments lookup
+});
 
-  beforeEach(() => {
-    app = buildTestApp();
-  });
-
-  afterEach(async () => {
-    await app.close();
-  });
-
-  it("returns 400 when x-tenant-id header is missing", async () => {
+describe("tenantMiddleware (JWT-based)", () => {
+  it("returns 400 TENANT_REQUIRED when request.user is not set", async () => {
+    const app = buildTestApp(undefined);
     const res = await app.inject({ method: "GET", url: "/v1/test" });
     expect(res.statusCode).toBe(400);
-    const body = res.json<{ error: { code: string } }>();
-    expect(body.error.code).toBe("TENANT_REQUIRED");
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("TENANT_REQUIRED");
   });
 
-  it("returns 400 when x-tenant-id is not a valid UUID", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/test",
-      headers: { "x-tenant-id": "not-a-uuid" },
-    });
+  it("returns 400 TENANT_REQUIRED when orgId is empty", async () => {
+    const app = buildTestApp({ orgId: "" });
+    const res = await app.inject({ method: "GET", url: "/v1/test" });
     expect(res.statusCode).toBe(400);
-    const body = res.json<{ error: { code: string } }>();
-    expect(body.error.code).toBe("TENANT_REQUIRED");
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("TENANT_REQUIRED");
   });
 
-  it("returns 400 for empty x-tenant-id", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/test",
-      headers: { "x-tenant-id": "" },
-    });
-    expect(res.statusCode).toBe(400);
-  });
-
-  it("populates request.tenant with correct values for valid UUID", async () => {
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/test",
-      headers: { "x-tenant-id": VALID_UUID },
-    });
+  it("populates request.tenant from request.user.orgId", async () => {
+    const app = buildTestApp({});
+    const res = await app.inject({ method: "GET", url: "/v1/test" });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{
-      tenantId: string;
-      schemaName: string;
-      tier: string;
-    }>();
-    expect(body.tenantId).toBe(VALID_UUID);
-    expect(body.schemaName).toBe("tenant_550e8400e29b41d4a716446655440000");
+    const body = res.json<{ tenantId: string; schemaName: string; tier: string; role: string }>();
+    expect(body.tenantId).toBe(VALID_ORG_ID);
+    expect(body.schemaName).toBe(`tenant_${VALID_ORG_ID.replace(/-/g, "")}`);
     expect(body.tier).toBe("starter");
   });
 
-  it("is case-insensitive for UUID hex characters", async () => {
-    const upperUuid = VALID_UUID.toUpperCase();
-    const res = await app.inject({
-      method: "GET",
-      url: "/v1/test",
-      headers: { "x-tenant-id": upperUuid },
-    });
+  it("updates request.user.role from DB lookup", async () => {
+    const app = buildTestApp({});
+    const res = await app.inject({ method: "GET", url: "/v1/test" });
     expect(res.statusCode).toBe(200);
+    expect(res.json<{ role: string }>().role).toBe("AuditDirector");
+  });
+
+  it("defaults to starter tier when tenant not found in DB", async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce([])  // no tenant row
+      .mockResolvedValueOnce([]); // no role row
+    const app = buildTestApp({});
+    const res = await app.inject({ method: "GET", url: "/v1/test" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ tier: string }>().tier).toBe("starter");
+  });
+
+  it("defaults to ReadOnly role when no role assignment found", async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce([{ tier: "growth" }])
+      .mockResolvedValueOnce([]); // no role_assignments row
+    const app = buildTestApp({});
+    const res = await app.inject({ method: "GET", url: "/v1/test" });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ role: string }>().role).toBe("ReadOnly");
   });
 });
