@@ -1,0 +1,69 @@
+@import "tailwindcss";
+
+/* ===== GRC Design Tokens — Slate Indigo palette ===== */
+
+/* Dark mode (authenticated app default) */
+:root,
+[data-theme="dark"] {
+  --surface-base: #09090b;
+  --surface-elevated: #18181b;
+  --surface-overlay: #27272a;
+  --text-primary: #fafafa;
+  --text-secondary: #a1a1aa;
+  --text-muted: #52525b;
+  --accent: #6366f1;
+  --accent-hover: #4f46e5;
+  --border-subtle: #27272a;
+  --border-default: #3f3f46;
+  --status-pass: #22c55e;
+  --status-warn: #f59e0b;
+  --status-fail: #ef4444;
+  --status-pass-bg: #14532d;
+  --status-warn-bg: #451a03;
+  --status-fail-bg: #450a0a;
+}
+
+/* Light mode */
+[data-theme="light"] {
+  --surface-base: #fafafa;
+  --surface-elevated: #ffffff;
+  --surface-overlay: #f4f4f5;
+  --text-primary: #09090b;
+  --text-secondary: #52525b;
+  --text-muted: #a1a1aa;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --border-subtle: #e4e4e7;
+  --border-default: #d4d4d8;
+}
+
+/* ===== Semantic Tailwind utilities via @theme inline ===== */
+/* These generate bg-surface-base, text-foreground, etc. as Tailwind utilities */
+@theme inline {
+  --color-surface-base: var(--surface-base);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-surface-overlay: var(--surface-overlay);
+  --color-foreground: var(--text-primary);
+  --color-foreground-secondary: var(--text-secondary);
+  --color-foreground-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-border: var(--border-default);
+  --color-border-subtle: var(--border-subtle);
+  --color-status-pass: var(--status-pass);
+  --color-status-warn: var(--status-warn);
+  --color-status-fail: var(--status-fail);
+  --color-status-pass-bg: var(--status-pass-bg);
+  --color-status-warn-bg: var(--status-warn-bg);
+  --color-status-fail-bg: var(--status-fail-bg);
+}
+
+/* ===== Motion — respect prefers-reduced-motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

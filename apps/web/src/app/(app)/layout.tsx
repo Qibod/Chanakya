@@ -46,7 +46,7 @@ export default async function AppShellLayout({
       {/* Main content + top nav */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <TopNav />
-        <main className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main id="main-content" className="flex-1 overflow-y-auto p-6">{children}</main>
       </div>
     </div>
   );

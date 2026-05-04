@@ -1,0 +1,49 @@
+/* GRC Design Tokens — Slate Indigo palette */
+/* Source of truth for all semantic CSS custom properties. */
+/* These values are mirrored in apps/web/src/app/globals.css. */
+
+/* ===== Dark mode (authenticated app default) ===== */
+:root,
+[data-theme="dark"] {
+  --surface-base: #09090b;       /* zinc-950 — page background */
+  --surface-elevated: #18181b;   /* zinc-900 — cards, panels, sidebar */
+  --surface-overlay: #27272a;    /* zinc-800 — dropdowns, tooltips, modals */
+  --text-primary: #fafafa;       /* zinc-50 — primary content */
+  --text-secondary: #a1a1aa;     /* zinc-400 — labels, supporting text */
+  --text-muted: #52525b;         /* zinc-600 — timestamps, disabled states */
+  --accent: #6366f1;             /* indigo-500 — CTAs, focus rings, active states */
+  --accent-hover: #4f46e5;       /* indigo-600 — hover on accent elements */
+  --border-subtle: #27272a;      /* zinc-800 — dividers, card borders */
+  --border-default: #3f3f46;     /* zinc-700 — input borders, active separators */
+  --status-pass: #22c55e;        /* green-500 */
+  --status-warn: #f59e0b;        /* amber-500 */
+  --status-fail: #ef4444;        /* red-500 */
+  --status-pass-bg: #14532d;     /* green-950 */
+  --status-warn-bg: #451a03;     /* amber-950 */
+  --status-fail-bg: #450a0a;     /* red-950 */
+}
+
+/* ===== Light mode ===== */
+[data-theme="light"] {
+  --surface-base: #fafafa;       /* zinc-50 */
+  --surface-elevated: #ffffff;   /* white */
+  --surface-overlay: #f4f4f5;   /* zinc-100 */
+  --text-primary: #09090b;       /* zinc-950 */
+  --text-secondary: #52525b;     /* zinc-600 */
+  --text-muted: #a1a1aa;         /* zinc-400 */
+  --accent: #4f46e5;             /* indigo-600 — slightly darker for light bg contrast */
+  --accent-hover: #4338ca;       /* indigo-700 */
+  --border-subtle: #e4e4e7;      /* zinc-200 */
+  --border-default: #d4d4d8;     /* zinc-300 */
+  /* Status tokens are the same across themes */
+}
+
+/* ===== Motion: respect prefers-reduced-motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}

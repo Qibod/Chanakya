@@ -40,6 +40,23 @@ const config = [
       ],
     },
   },
+  // no-primitive-colour: warn on raw Tailwind color utilities in feature code
+  // Story 1.4 layout components and packages/ui (design system) are excluded.
+  // Scope: apps/web/src/features/** only (new feature code going forward).
+  {
+    files: ["apps/web/src/features/**/*.{ts,tsx}"],
+    rules: {
+      "no-restricted-syntax": [
+        "warn",
+        {
+          selector:
+            "JSXAttribute[name.name='className'] > Literal[value=/\\b(text|bg|border|ring|fill|stroke|outline|from|to|via)-(slate|zinc|gray|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\\d+\\b/]",
+          message:
+            "Primitive Tailwind color detected. Use semantic tokens: bg-surface-base, text-foreground, bg-accent, etc. (ARCH-TOKENS)",
+        },
+      ],
+    },
+  },
 ];
 
 export default config;
