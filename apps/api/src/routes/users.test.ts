@@ -72,6 +72,82 @@ beforeEach(() => {
   vi.mocked(redis.del).mockResolvedValue(1);
 });
 
+describe("GET /v1/me", () => {
+  it("returns user identity, role, and tier", async () => {
+    setupDbMock("AuditDirector");
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([{ tier: "growth" }] as never)
+      .mockResolvedValueOnce([{ role: "AuditDirector" }] as never);
+    const app = buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/me" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ userId: string; orgId: string; role: string; tier: string }>();
+    expect(body.userId).toBe("user_admin");
+    expect(body.orgId).toBe(TENANT_ID);
+    expect(body.role).toBe("AuditDirector");
+    expect(body.tier).toBe("growth");
+  });
+});
+
+describe("GET /v1/users", () => {
+  it("returns 403 when caller is ControlOwner", async () => {
+    setupDbMock("ControlOwner");
+    const app = buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/users" });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("returns user list for OrgAdmin", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([{ tier: "growth" }] as never)
+      .mockResolvedValueOnce([{ role: "OrgAdmin" }] as never)
+      .mockResolvedValueOnce([
+        { id: "user_1", email: "alice@example.com", name: "Alice", active: true, role: "AuditDirector" },
+        { id: "user_2", email: "bob@example.com", name: "Bob", active: false, role: "ControlOwner" },
+      ] as never);
+    const app = buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/users" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ data: Array<{ id: string; role: string; active: boolean }> }>();
+    expect(body.data).toHaveLength(2);
+    expect(body.data[0].id).toBe("user_1");
+    expect(body.data[1].active).toBe(false);
+  });
+});
+
+describe("PATCH /v1/users/:id", () => {
+  it("returns 403 when caller is ControlOwner", async () => {
+    setupDbMock("ControlOwner");
+    const app = buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/users/${TARGET_USER}`,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "AuditDirector" }),
+    });
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("updates role and flushes Redis cache", async () => {
+    setupDbMock("OrgAdmin");
+    const app = buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: `/v1/users/${TARGET_USER}`,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ role: "AuditDirector" }),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json<{ data: { userId: string; role: string } }>().data.role).toBe("AuditDirector");
+    expect(prisma.$executeRawUnsafe).toHaveBeenCalledWith(
+      expect.stringContaining("role_assignments"),
+      TARGET_USER,
+      "AuditDirector"
+    );
+    expect(redis.del).toHaveBeenCalledWith(`rbac:${TENANT_ID}:${TARGET_USER}`);
+  });
+});
+
 describe("DELETE /v1/users/:userId", () => {
   it("returns 403 when caller is ControlOwner (not OrgAdmin)", async () => {
     setupDbMock("ControlOwner");

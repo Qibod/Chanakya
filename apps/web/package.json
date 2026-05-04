@@ -13,6 +13,10 @@
     "next": "^15.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "@clerk/nextjs": "^7.2.7",
+    "@tanstack/react-query": "^5.100.9",
+    "zustand": "^5.0.0",
+    "lucide-react": "^0.469.0",
     "@grc/config": "workspace:*",
     "@grc/types": "workspace:*",
     "@grc/ui": "workspace:*"
