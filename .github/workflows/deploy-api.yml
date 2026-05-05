@@ -89,6 +89,7 @@ jobs:
           image: ${{ env.IMAGE }}:${{ github.sha }}
           env_vars: |
             REDIS_URL=redis://10.104.22.115:6379
+            GCP_PROJECT_ID=${{ vars.GCP_PROJECT_ID }}
           flags: >-
             --min-instances=1 --max-instances=20 --port=3001
             --set-secrets=DATABASE_URL=grc-database-url-staging:latest,CLERK_SECRET_KEY=grc-clerk-secret-key-staging:latest,CLERK_WEBHOOK_SIGNING_SECRET=grc-clerk-webhook-secret-staging:latest,SENTRY_DSN=grc-sentry-dsn-staging:latest
