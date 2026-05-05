@@ -16,8 +16,6 @@ on:
       - "packages/config/**"
 
 env:
-  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
-  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
   VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
   VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -27,37 +25,22 @@ permissions:
 
 jobs:
   deploy:
-    name: Build & Deploy Web to Vercel
+    name: Deploy Web to Vercel
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-
       - name: Install Vercel CLI
-        run: pnpm add -g vercel@latest
+        run: npm install -g vercel@latest
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Pull Vercel environment
-        run: vercel pull --yes --environment=${{ github.ref == 'refs/heads/main' && 'production' || 'preview' }} --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
-
-      - name: Build
-        run: vercel build ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }}
-        working-directory: apps/web
-
-      - name: Deploy
+      - name: Deploy to Vercel
         id: deploy
         run: |
-          url=$(vercel deploy --prebuilt ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} --token=${{ secrets.VERCEL_TOKEN }})
+          url=$(vercel deploy \
+            ${{ github.ref == 'refs/heads/main' && '--prod' || '' }} \
+            --token=${{ secrets.VERCEL_TOKEN }} \
+            --yes)
           echo "url=$url" >> $GITHUB_OUTPUT
         working-directory: apps/web
 
@@ -72,16 +55,3 @@ jobs:
               repo: context.repo.repo,
               body: `🚀 Preview deployed: ${{ steps.deploy.outputs.url }}`
             })
-
-      - name: Upload Sentry source maps
-        if: github.ref == 'refs/heads/main'
-        continue-on-error: true
-        run: |
-          pnpm dlx @sentry/cli releases \
-            --org ${{ vars.SENTRY_ORG }} \
-            --project ${{ vars.SENTRY_PROJECT_WEB }} \
-            files ${{ github.sha }} \
-            upload-sourcemaps apps/web/.next \
-            --url-prefix '~/_next'
-        env:
-          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
