@@ -61,10 +61,25 @@ jobs:
           docker push ${{ env.IMAGE }}:${{ github.sha }}
           docker push ${{ env.IMAGE }}:latest
 
-      - name: Apply Prisma migrations (zero-downtime gate)
-        run: pnpm --filter @grc/db db:migrate
-        env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      - name: Build and push migrate image
+        run: |
+          MIGRATE_IMAGE=${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY }}/migrate
+          docker build --platform linux/amd64 -f apps/api/Dockerfile.migrate \
+            -t ${MIGRATE_IMAGE}:${{ github.sha }} \
+            -t ${MIGRATE_IMAGE}:latest .
+          docker push ${MIGRATE_IMAGE}:${{ github.sha }}
+          docker push ${MIGRATE_IMAGE}:latest
+          gcloud run jobs update grc-migrate-staging \
+            --image ${MIGRATE_IMAGE}:${{ github.sha }} \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }}
+
+      - name: Apply Prisma migrations via Cloud Run Job (VPC access)
+        run: |
+          gcloud run jobs execute grc-migrate-staging \
+            --region ${{ env.GCP_REGION }} \
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --wait
 
       - name: Deploy to Cloud Run
         uses: google-github-actions/deploy-cloudrun@v3
