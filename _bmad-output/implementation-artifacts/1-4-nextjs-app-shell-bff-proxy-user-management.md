@@ -50,7 +50,7 @@ So that I only see what is relevant to my responsibilities from first login.
   - [x] Set Clerk env vars in `.env.example` if not already present: `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`, `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_IN_URL=/`, `NEXT_PUBLIC_CLERK_AFTER_SIGN_UP_URL=/`
 
 - [x] Task 5 — BFF proxy catch-all route (AC: #4)
-  - [ ] Create `apps/web/src/app/api/v1/[...path]/route.ts`
+  - [x] Create `apps/web/src/app/api/v1/[...path]/route.ts`
   - [x] Handle all HTTP methods: GET, POST, PATCH, DELETE, PUT
   - [x] Use `auth()` from `@clerk/nextjs/server` to verify the user is signed in; return 401 if not
   - [x] Forward request to `${process.env.INTERNAL_API_URL}/v1/${path.join('/')}` with:

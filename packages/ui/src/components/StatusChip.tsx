@@ -8,11 +8,11 @@ const statusChipVariants = cva(
   {
     variants: {
       variant: {
-        pass: "bg-green-950 text-green-400",
-        warn: "bg-amber-950 text-amber-400",
-        fail: "bg-red-950 text-red-400",
-        auto: "bg-indigo-950 text-indigo-400",
-        pending: "bg-zinc-800 text-zinc-400",
+        pass: "bg-[var(--status-pass-bg)] text-[var(--status-pass)]",
+        warn: "bg-[var(--status-warn-bg)] text-[var(--status-warn)]",
+        fail: "bg-[var(--status-fail-bg)] text-[var(--status-fail)]",
+        auto: "bg-[var(--status-auto-bg)] text-[var(--status-auto)]",
+        pending: "bg-[var(--status-pending-bg)] text-[var(--status-pending)]",
       },
       size: {
         sm: "px-2 py-0.5 text-[11px]",

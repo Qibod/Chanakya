@@ -22,6 +22,9 @@ export default async function HomePage() {
   const protocol = process.env["NODE_ENV"] === "production" ? "https" : "http";
 
   try {
+    // Loopback via the BFF proxy so Clerk session cookie is forwarded correctly.
+    // Assumes Vercel/Cloud Run resolves `host` to the same deployment — if running
+    // in a split-service topology use INTERNAL_API_URL directly and pass the token instead.
     const res = await fetch(`${protocol}://${host}/api/v1/me`, {
       headers: { cookie: headersList.get("cookie") ?? "" },
       cache: "no-store",

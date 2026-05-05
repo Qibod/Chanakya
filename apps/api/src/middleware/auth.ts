@@ -28,11 +28,12 @@ export async function authenticate(
     });
   }
 
-  // role is a default placeholder — overwritten by tenantMiddleware DB lookup
+  // role is a safe default — overwritten by tenantMiddleware DB lookup.
+  // ReadOnly ensures fail-closed if tenantMiddleware is skipped on a misconfigured route.
   request.user = {
     userId: auth.userId,
     orgId: auth.orgId,
-    role: "ControlOwner" as UserRole,
+    role: "ReadOnly" as UserRole,
     sessionId: auth.sessionId ?? "",
   };
 }

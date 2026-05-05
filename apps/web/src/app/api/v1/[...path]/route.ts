@@ -27,6 +27,7 @@ async function proxyRequest(
     Authorization: `Bearer ${token}`,
   };
   if (method !== "GET" && method !== "DELETE") {
+    // Assumes all mutating requests carry JSON bodies — multipart/form-data not supported here.
     headers["Content-Type"] = "application/json";
   }
 

@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { prisma } from "@grc/db";
+import { VertexAIProvider, generateTaskInstructions } from "@grc/ai";
 import {
   computeIncrementalCoverage,
   computeOverlapPercent,
@@ -15,6 +16,7 @@ import {
   maxFrameworkSelectionsForTier,
   parseFrameworkRefsArray,
   patchControlBodySchema,
+  postControlAssignBodySchema,
   postFrameworkActivateBodySchema,
   type FrameworkId,
   validateFrameworkSelectionCount,
@@ -25,6 +27,25 @@ import { requireRole, requireTier } from "../../middleware/rbac.js";
 import { finalizeDismissIfComplete } from "../../services/onboarding-progress.js";
 
 const frameworksPreHandlers = [requireTier("starter"), requireRole("ControlOwner")];
+const assignPreHandlers = [requireTier("starter"), requireRole("AuditDirector")];
+
+function fallbackInstruction(controlName: string): string {
+  return [
+    `Complete the assigned control: ${controlName}.`,
+    "",
+    "What you'll need:",
+    "- Access to the relevant system(s)",
+    "- Any existing policy or checklist your team uses",
+    "",
+    "Steps:",
+    "1. Review what the control is asking for in plain terms (who/what/when).",
+    "2. In the relevant system(s), confirm the current state matches what’s expected.",
+    "3. Capture evidence (screenshot/export/log) for the current period.",
+    "4. If something is missing, fix it or flag it to the Audit Director with what’s needed.",
+    "5. Upload/attach the evidence to the control task.",
+    "6. Mark the task complete.",
+  ].join("\n");
+}
 
 /** Postgres 23505 / Prisma P2002 — concurrent activation or duplicate framework insert. */
 function isPostgresUniqueViolation(err: unknown): boolean {
@@ -254,14 +275,16 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
           name: string;
           domain: string;
           status: string;
+          assigned_to: string | null;
+          updated_at: Date | string | null;
           framework: string;
           framework_refs: unknown;
         }>
       >(
         after
-          ? `SELECT id, canonical_id, name, domain, status, framework, framework_refs
+          ? `SELECT id, canonical_id, name, domain, status, assigned_to, updated_at, framework, framework_refs
              FROM "${schema}".control_items WHERE id > $1 ORDER BY id ASC LIMIT $2`
-          : `SELECT id, canonical_id, name, domain, status, framework, framework_refs
+          : `SELECT id, canonical_id, name, domain, status, assigned_to, updated_at, framework, framework_refs
              FROM "${schema}".control_items ORDER BY id ASC LIMIT $1`,
         ...(after ? [after, fetchLimit] : [fetchLimit])
       );
@@ -277,6 +300,13 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
         name: r.name,
         domain: r.domain,
         status: r.status,
+        assignedTo: r.assigned_to ?? null,
+        updatedAt:
+          r.updated_at instanceof Date
+            ? r.updated_at.toISOString()
+            : typeof r.updated_at === "string"
+              ? r.updated_at
+              : null,
         framework: r.framework,
         frameworkRefs: Array.isArray(r.framework_refs)
           ? (r.framework_refs as string[])
@@ -300,6 +330,8 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
     { preHandler: frameworksPreHandlers },
     async (request, reply) => {
       const schema = request.tenant.schemaName;
+      const tenantId = request.tenant.tenantId;
+      const actorId = request.user?.userId;
       if (!ensureTenantSchemaNameOrReply(reply, schema)) return;
 
       const id = (request as FastifyRequest<{ Params: { id: string } }>).params?.id;
@@ -344,6 +376,121 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
         code: p.code,
       }));
 
+      // Assignment + instruction regeneration (Story 3.3)
+      const [integrationRows, assignmentRows] = await Promise.all([
+        prisma.$queryRawUnsafe<Array<{ provider: string }>>(
+          `SELECT provider FROM "${schema}".integration_configs
+           WHERE status = 'connected'
+           ORDER BY provider`
+        ),
+        prisma.$queryRawUnsafe<
+          Array<{
+            id: string;
+            assigned_to: string;
+            due_date: string | null;
+            instruction: string;
+            instruction_updated_at: Date | string | null;
+            instruction_context: unknown;
+          }>
+        >(
+          `SELECT id, assigned_to, due_date, instruction, instruction_updated_at, instruction_context
+           FROM "${schema}".control_assignments
+           WHERE control_item_id = $1 AND is_current = TRUE
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          id
+        ),
+      ]);
+
+      const integrationsUsed = integrationRows
+        .map((r) => String(r.provider))
+        .filter((p) => p.length > 0)
+        .sort((a, b) => a.localeCompare(b));
+
+      const assignment = assignmentRows[0] ?? null;
+      let instructionRegenerated = false;
+
+      if (assignment && actorId) {
+        const rawCtx = assignment.instruction_context;
+        const ctx =
+          rawCtx && typeof rawCtx === "object"
+            ? (rawCtx as { integrations?: unknown })
+            : typeof rawCtx === "string"
+              ? (JSON.parse(rawCtx) as { integrations?: unknown })
+              : {};
+
+        const prevIntegrations = Array.isArray(ctx.integrations)
+          ? ctx.integrations.map((x) => String(x)).sort((a, b) => a.localeCompare(b))
+          : [];
+
+        const changed =
+          prevIntegrations.length !== integrationsUsed.length ||
+          prevIntegrations.some((v, i) => v !== integrationsUsed[i]);
+
+        if (changed) {
+          let newInstruction = "";
+          try {
+            const ai = new VertexAIProvider();
+            newInstruction = await generateTaskInstructions(ai, {
+              controlName: row.name,
+              domain: row.domain,
+              frameworkRefs,
+              connectedIntegrations: integrationsUsed,
+            });
+          } catch (err) {
+            fastify.log.warn({ err, tenantId, controlId: id }, "instruction regeneration failed");
+            newInstruction = fallbackInstruction(row.name);
+          }
+          if (!newInstruction) newInstruction = fallbackInstruction(row.name);
+
+          const newContext = {
+            integrations: integrationsUsed,
+            control: { id: row.id, canonicalId: row.canonical_id, name: row.name },
+            frameworkRefs,
+          };
+
+          await prisma.$transaction(async (tx) => {
+            await tx.$executeRawUnsafe(
+              `UPDATE "${schema}".control_assignments
+               SET instruction = $1,
+                   instruction_context = $2::jsonb,
+                   instruction_updated_at = NOW()
+               WHERE id = $3`,
+              newInstruction,
+              JSON.stringify(newContext),
+              assignment.id
+            );
+
+            await tx.platformAuditLog.create({
+              data: {
+                tenantId,
+                actorId,
+                action: "control.task_instruction_regenerated",
+                resourceType: "control_item",
+                resourceId: id,
+                ipAddress: auditIpFromRequest(request) ?? null,
+              },
+            });
+
+            await tx.platformAuditLog.create({
+              data: {
+                tenantId,
+                actorId,
+                action: "control.task_instruction_updated",
+                resourceType: "control_assignment",
+                resourceId: assignment.id,
+                ipAddress: auditIpFromRequest(request) ?? null,
+              },
+            });
+          });
+
+          instructionRegenerated = true;
+          assignment.instruction = newInstruction;
+          assignment.instruction_updated_at = new Date().toISOString();
+          assignment.instruction_context = newContext;
+        }
+      }
+
       return reply.send({
         data: {
           id: row.id,
@@ -354,6 +501,22 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
           framework: row.framework,
           frameworkRefs,
           requirementDetails,
+          assignment: assignment
+            ? {
+                id: assignment.id,
+                assignedTo: assignment.assigned_to,
+                dueDate: assignment.due_date ?? null,
+                instruction: assignment.instruction,
+                instructionUpdatedAt:
+                  assignment.instruction_updated_at instanceof Date
+                    ? assignment.instruction_updated_at.toISOString()
+                    : typeof assignment.instruction_updated_at === "string"
+                      ? assignment.instruction_updated_at
+                      : null,
+                integrationsUsed,
+              }
+            : null,
+          instructionRegenerated,
         },
       });
     }
@@ -365,8 +528,13 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const schema = request.tenant.schemaName;
       const tenantId = request.tenant.tenantId;
-      const userId = request.user?.userId ?? "";
+      const userId = request.user?.userId;
       if (!ensureTenantSchemaNameOrReply(reply, schema)) return;
+      if (!userId) {
+        return reply.code(401).send({
+          error: { code: "UNAUTHENTICATED", message: "Authentication required" },
+        });
+      }
 
       const id = (request as FastifyRequest<{ Params: { id: string } }>).params?.id;
       if (!id) {
@@ -385,6 +553,12 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
             message: "Invalid request body",
             details: parsed.error.flatten(),
           },
+        });
+      }
+
+      if (!parsed.data.assignToSelf) {
+        return reply.code(400).send({
+          error: { code: "VALIDATION_ERROR", message: "Invalid request body" },
         });
       }
 
@@ -409,6 +583,174 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
         data: {
           id: updated[0].id,
           assignedTo: userId,
+        },
+      });
+    }
+  );
+
+  fastify.post(
+    "/v1/controls/:id/assign",
+    { preHandler: assignPreHandlers },
+    async (request, reply) => {
+      const schema = request.tenant.schemaName;
+      const tenantId = request.tenant.tenantId;
+      if (!ensureTenantSchemaNameOrReply(reply, schema)) return;
+
+      const userId = request.user?.userId;
+      if (!userId) {
+        return reply.code(401).send({
+          error: { code: "UNAUTHENTICATED", message: "Authentication required" },
+        });
+      }
+
+      const id = (request as FastifyRequest<{ Params: { id: string } }>).params?.id;
+      if (!id) {
+        return reply.code(400).send({
+          error: { code: "VALIDATION_ERROR", message: "Control id required" },
+        });
+      }
+
+      const parsed = postControlAssignBodySchema.safeParse(
+        (request as FastifyRequest<{ Body: unknown }>).body
+      );
+      if (!parsed.success) {
+        return reply.code(400).send({
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Invalid request body",
+            details: parsed.error.flatten(),
+          },
+        });
+      }
+
+      const assignedTo = parsed.data.assignedTo;
+      const dueDate = parsed.data.dueDate ?? null;
+
+      const [integrationRows, assignedUserRows, controlRows] = await Promise.all([
+        prisma.$queryRawUnsafe<Array<{ provider: string }>>(
+          `SELECT provider FROM "${schema}".integration_configs
+           WHERE status = 'connected'
+           ORDER BY provider`
+        ),
+        prisma.$queryRawUnsafe<Array<{ id: string }>>(
+          `SELECT id FROM "${schema}".users WHERE id = $1 LIMIT 1`,
+          assignedTo
+        ),
+        prisma.$queryRawUnsafe<
+          Array<{
+            id: string;
+            canonical_id: string;
+            name: string;
+            domain: string;
+            framework_refs: unknown;
+          }>
+        >(
+          `SELECT id, canonical_id, name, domain, framework_refs
+           FROM "${schema}".control_items WHERE id = $1 LIMIT 1`,
+          id
+        ),
+      ]);
+
+      if (!assignedUserRows[0]?.id) {
+        return reply.code(404).send({
+          error: { code: "NOT_FOUND", message: "Assigned user not found" },
+        });
+      }
+
+      const control = controlRows[0];
+      if (!control) {
+        return reply.code(404).send({
+          error: { code: "NOT_FOUND", message: "Control not found" },
+        });
+      }
+
+      const frameworkRefs = Array.isArray(control.framework_refs)
+        ? (control.framework_refs as string[])
+        : typeof control.framework_refs === "string"
+          ? (JSON.parse(control.framework_refs) as string[])
+          : [];
+
+      const integrationsUsed = integrationRows
+        .map((r) => String(r.provider))
+        .filter((p) => p.length > 0)
+        .sort((a, b) => a.localeCompare(b));
+
+      let instruction = "";
+      let instructionModel = "claude-sonnet-4-6";
+      try {
+        const ai = new VertexAIProvider();
+        instruction = await generateTaskInstructions(ai, {
+          controlName: control.name,
+          domain: control.domain,
+          frameworkRefs,
+          connectedIntegrations: integrationsUsed,
+        });
+      } catch (err) {
+        fastify.log.warn({ err, tenantId, controlId: id }, "task instruction generation failed");
+        instruction = fallbackInstruction(control.name);
+      }
+
+      if (!instruction) instruction = fallbackInstruction(control.name);
+
+      const ipAddress = auditIpFromRequest(request);
+      const instructionContext = {
+        integrations: integrationsUsed,
+        control: { id: control.id, canonicalId: control.canonical_id, name: control.name },
+        frameworkRefs,
+      };
+
+      await prisma.$transaction(async (tx) => {
+        await tx.$executeRawUnsafe(
+          `UPDATE "${schema}".control_items
+           SET assigned_to = $1, status = 'in_review', updated_at = NOW()
+           WHERE id = $2`,
+          assignedTo,
+          id
+        );
+
+        // Preserve history: mark previous "current" assignment as non-current, then insert new row.
+        await tx.$executeRawUnsafe(
+          `UPDATE "${schema}".control_assignments
+           SET is_current = FALSE
+           WHERE control_item_id = $1 AND is_current = TRUE`,
+          id
+        );
+
+        await tx.$executeRawUnsafe(
+          `INSERT INTO "${schema}".control_assignments
+            (id, control_item_id, assigned_to, assigned_by, due_date, instruction, instruction_model, instruction_context, instruction_updated_at, is_current, business_unit_id, created_at)
+           VALUES ($1, $2, $3, $4, $5::date, $6, $7, $8::jsonb, NOW(), TRUE, NULL, NOW())`,
+          uuidv7(),
+          id,
+          assignedTo,
+          userId,
+          dueDate,
+          instruction,
+          instructionModel,
+          JSON.stringify(instructionContext)
+        );
+
+        await tx.platformAuditLog.create({
+          data: {
+            tenantId,
+            actorId: userId,
+            action: "control.assigned",
+            resourceType: "control_item",
+            resourceId: id,
+            ipAddress: ipAddress ?? null,
+          },
+        });
+      });
+
+      return reply.send({
+        data: {
+          id,
+          assignedTo,
+          dueDate,
+          status: "in_review",
+          instruction,
+          instructionUpdatedAt: new Date().toISOString(),
+          integrationsUsed,
         },
       });
     }

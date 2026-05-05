@@ -26,6 +26,21 @@ vi.mock("@grc/db", () => {
   return { prisma };
 });
 
+vi.mock("@grc/ai", () => ({
+  VertexAIProvider: class VertexAIProvider {
+    async complete() {
+      return {
+        content: "1. Do the thing.\n2. Confirm the thing.\n\nReferences:\n- SOC2:CC6.1",
+        model: "claude-sonnet-4-6",
+        inputTokens: 1,
+        outputTokens: 1,
+      };
+    }
+  },
+  generateTaskInstructions: async (_provider: unknown, _input: unknown) =>
+    "1. Do the thing.\n2. Confirm the thing.\n\nReferences:\n- SOC2:CC6.1",
+}));
+
 import { prisma } from "@grc/db";
 import { frameworkRoutes } from "./frameworks.js";
 
@@ -323,19 +338,22 @@ describe("POST /v1/frameworks/activate", () => {
 
 describe("GET /v1/controls/:id", () => {
   it("returns requirementDetails for a unified control", async () => {
-    vi.mocked(prisma.$queryRawUnsafe).mockResolvedValueOnce(
-      [
-        {
-          id: "ctrl1",
-          canonical_id: "c-access-logical",
-          name: "Logical access",
-          domain: "Access Control",
-          status: "pending",
-          framework: "SOC2",
-          framework_refs: ["ISO27001:A.9.2.1", "SOC2:CC6.1"],
-        },
-      ] as never
-    );
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "ctrl1",
+            canonical_id: "c-access-logical",
+            name: "Logical access",
+            domain: "Access Control",
+            status: "pending",
+            framework: "SOC2",
+            framework_refs: ["ISO27001:A.9.2.1", "SOC2:CC6.1"],
+          },
+        ] as never
+      )
+      .mockResolvedValueOnce([] as never) // integrations
+      .mockResolvedValueOnce([] as never); // assignment
 
     const app = buildApp("OrgAdmin", "growth");
     const res = await app.inject({ method: "GET", url: "/v1/controls/ctrl1" });
@@ -344,10 +362,96 @@ describe("GET /v1/controls/:id", () => {
       data: {
         requirementDetails: Array<{ frameworkId: string; code: string }>;
         frameworkRefs: string[];
+        assignment?: { assignedTo: string | null; instruction: string | null } | null;
+        instructionRegenerated?: boolean;
       };
     };
     expect(body.data.frameworkRefs.length).toBe(2);
     expect(body.data.requirementDetails.map((r) => r.frameworkId).sort()).toEqual(["ISO27001", "SOC2"]);
+    await app.close();
+  });
+
+  it("includes assignment data when present", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "ctrl1",
+            canonical_id: "c-access-logical",
+            name: "Logical access",
+            domain: "Access Control",
+            status: "in_review",
+            framework: "SOC2",
+            framework_refs: ["SOC2:CC6.1"],
+          },
+        ] as never
+      )
+      .mockResolvedValueOnce([] as never) // integrations
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "as1",
+            assigned_to: "user_2",
+            due_date: "2026-06-01",
+            instruction: "Do X",
+            instruction_updated_at: new Date("2026-05-05T10:00:00Z"),
+            instruction_context: { integrations: ["okta"] },
+          },
+        ] as never
+      );
+
+    const app = buildApp("OrgAdmin", "growth");
+    const res = await app.inject({ method: "GET", url: "/v1/controls/ctrl1" });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { data: { assignment: { assignedTo: string } | null } };
+    expect(body.data.assignment?.assignedTo).toBe("user_2");
+    await app.close();
+  });
+
+  it("regenerates instruction when integrations change", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "ctrl1",
+            canonical_id: "c-access-logical",
+            name: "Logical access",
+            domain: "Access Control",
+            status: "in_review",
+            framework: "SOC2",
+            framework_refs: ["SOC2:CC6.1"],
+          },
+        ] as never
+      )
+      .mockResolvedValueOnce([{ provider: "aws" }] as never) // integrations now
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "as1",
+            assigned_to: "user_2",
+            due_date: null,
+            instruction: "Old",
+            instruction_updated_at: new Date("2026-05-05T10:00:00Z"),
+            instruction_context: { integrations: ["okta"] },
+          },
+        ] as never
+      );
+
+    const app = buildApp("OrgAdmin", "growth");
+    const res = await app.inject({ method: "GET", url: "/v1/controls/ctrl1" });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { data: { instructionRegenerated?: boolean } };
+    expect(body.data.instructionRegenerated).toBe(true);
+    expect(String(vi.mocked(prisma.$executeRawUnsafe).mock.calls.map((c) => c[0]).join("\n"))).toContain(
+      "UPDATE \"tenant_"
+    );
+    expect(prisma.platformAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "control.task_instruction_regenerated",
+        }) as Record<string, unknown>,
+      })
+    );
     await app.close();
   });
 
@@ -372,6 +476,8 @@ describe("GET /v1/controls", () => {
             name: "Test",
             domain: "D",
             status: "pending",
+            assigned_to: "user_1",
+            updated_at: new Date("2026-05-05T10:00:00Z"),
             framework: "SOC2",
             framework_refs: ["SOC2:CC1"],
           },
@@ -381,6 +487,8 @@ describe("GET /v1/controls", () => {
             name: "Test2",
             domain: "D",
             status: "pending",
+            assigned_to: null,
+            updated_at: new Date("2026-05-05T11:00:00Z"),
             framework: "SOC2",
             framework_refs: ["SOC2:CC2"],
           },
@@ -391,11 +499,165 @@ describe("GET /v1/controls", () => {
     const res = await app.inject({ method: "GET", url: "/v1/controls?limit=1" });
     expect(res.statusCode).toBe(200);
     const body = JSON.parse(res.body) as {
-      data: { total: number; items: unknown[]; nextCursor: string | null };
+      data: {
+        total: number;
+        items: Array<{ assignedTo?: string | null; updatedAt?: string | null }>;
+        nextCursor: string | null;
+      };
     };
     expect(body.data.total).toBe(2);
     expect(body.data.items).toHaveLength(1);
     expect(body.data.nextCursor).toBe("a");
+    expect(body.data.items[0]?.assignedTo).toBe("user_1");
+    expect(body.data.items[0]?.updatedAt).toBe("2026-05-05T10:00:00.000Z");
+    await app.close();
+  });
+});
+
+describe("PATCH /v1/controls/:id", () => {
+  it("returns 400 when body is invalid", async () => {
+    const app = buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/controls/a",
+      payload: { assignToSelf: false },
+    });
+    expect(res.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("returns 404 when control is missing", async () => {
+    vi.mocked(prisma.$queryRawUnsafe).mockResolvedValueOnce([] as never);
+    const app = buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/controls/missing",
+      payload: { assignToSelf: true },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("assigns to self when body is valid", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([{ id: "a" }] as never)
+      .mockResolvedValueOnce([{ onboarding_first_report_completed_at: null }] as never)
+      .mockResolvedValueOnce([{ ok: false }] as never)
+      .mockResolvedValueOnce([{ ok: false }] as never)
+      .mockResolvedValueOnce([{ ok: false }] as never)
+      .mockResolvedValueOnce([{ ok: false }] as never);
+    const app = buildApp();
+    const res = await app.inject({
+      method: "PATCH",
+      url: "/v1/controls/a",
+      payload: { assignToSelf: true },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body) as { data: { id: string; assignedTo: string } };
+    expect(body.data.id).toBe("a");
+    expect(body.data.assignedTo).toBe("user_1");
+    await app.close();
+  });
+});
+
+describe("POST /v1/controls/:id/assign", () => {
+  it("returns 401 when unauthenticated", async () => {
+    const app = buildApp("AuditDirector");
+    // Simulate unauthenticated: role is present but userId missing
+    app.addHook("preHandler", async (request) => {
+      request.user = { ...(request.user as UserContext), userId: "" };
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/controls/a/assign",
+      payload: { assignedTo: "user_2", dueDate: "2026-06-01" },
+    });
+    expect(res.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("returns 403 for ControlOwner role", async () => {
+    const app = buildApp("ControlOwner");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/controls/a/assign",
+      payload: { assignedTo: "user_2" },
+    });
+    expect(res.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("returns 404 when control missing", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([] as never) // integrations
+      .mockResolvedValueOnce([{ id: "user_2" }] as never) // assigned user exists
+      .mockResolvedValueOnce([] as never); // control row missing
+
+    const app = buildApp("AuditDirector");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/controls/missing/assign",
+      payload: { assignedTo: "user_2" },
+    });
+    expect(res.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("returns 200 and writes audit log on success", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([{ provider: "okta" }, { provider: "aws" }] as never) // integrations
+      .mockResolvedValueOnce([{ id: "user_2" }] as never) // assigned user exists
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "a",
+            canonical_id: "c1",
+            name: "Logical access",
+            domain: "Access Control",
+            framework_refs: ["SOC2:CC6.1"],
+          },
+        ] as never
+      ); // control row
+    vi.mocked(prisma.$executeRawUnsafe).mockResolvedValue(1 as never);
+
+    const app = buildApp("AuditDirector");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/controls/a/assign",
+      payload: { assignedTo: "user_2", dueDate: "2026-06-01" },
+    });
+    expect(res.statusCode).toBe(200);
+
+    const body = JSON.parse(res.body) as {
+      data: {
+        id: string;
+        assignedTo: string;
+        dueDate: string | null;
+        status: string;
+        instruction: string;
+        integrationsUsed: string[];
+      };
+    };
+    expect(body.data.id).toBe("a");
+    expect(body.data.assignedTo).toBe("user_2");
+    expect(body.data.dueDate).toBe("2026-06-01");
+    expect(body.data.status).toBe("in_review");
+    expect(body.data.instruction.length).toBeGreaterThan(0);
+    expect(body.data.integrationsUsed).toEqual(["aws", "okta"]);
+
+    expect(prisma.platformAuditLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          action: "control.assigned",
+          resourceType: "control_item",
+          resourceId: "a",
+          tenantId: TENANT_ID,
+          actorId: "user_1",
+        }) as Record<string, unknown>,
+      })
+    );
+
     await app.close();
   });
 });

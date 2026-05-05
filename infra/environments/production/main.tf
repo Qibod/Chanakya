@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = "grc-terraform-state-production"
+    bucket = "grcchanakya-terraform-state-production"
     prefix = "terraform/state"
   }
 }
@@ -36,6 +36,10 @@ module "cloud_run" {
   service_account_email = var.service_account_email
   api_image             = var.api_image
   worker_image          = var.worker_image
+  vpc_network           = module.networking.vpc_id
+  vpc_subnetwork        = module.networking.subnet_id
+
+  depends_on = [module.networking]
 }
 
 module "cloud_tasks" {
@@ -74,4 +78,13 @@ module "networking" {
   project_id  = var.project_id
   region      = var.region
   environment = "production"
+}
+
+module "artifact_registry" {
+  source                = "../../modules/artifact-registry"
+  project_id            = var.project_id
+  region                = var.region
+  environment           = "production"
+  service_account_email = var.service_account_email
+  github_sa_email       = var.github_sa_email
 }

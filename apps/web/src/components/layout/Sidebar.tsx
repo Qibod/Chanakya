@@ -40,6 +40,8 @@ const ROLE_NAV: Partial<Record<UserRole, NavItem[]>> = {
     ...FULL_NAV,
     { href: "/settings/team", label: "Settings", icon: <Settings size={18} /> },
   ],
+  // AuditDirector intentionally gets FULL_NAV (no Settings) — same views as OrgAdmin
+  // minus tenant/user administration. Do not add Settings here.
   AuditDirector: FULL_NAV,
   ControlOwner: [
     { href: "/my-tasks", label: "My Tasks", icon: <CheckSquare size={18} /> },

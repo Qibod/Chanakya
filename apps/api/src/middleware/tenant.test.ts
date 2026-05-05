@@ -84,15 +84,15 @@ describe("tenantMiddleware (JWT-based)", () => {
     expect(res.json<{ role: string }>().role).toBe("AuditDirector");
   });
 
-  it("defaults to starter tier when tenant not found in DB", async () => {
+  it("returns 503 TENANT_NOT_PROVISIONED when tenant not found in DB", async () => {
     mockQuery.mockReset();
     mockQuery
       .mockResolvedValueOnce([])  // no tenant row
       .mockResolvedValueOnce([]); // no role row
     const app = buildTestApp({});
     const res = await app.inject({ method: "GET", url: "/v1/test" });
-    expect(res.statusCode).toBe(200);
-    expect(res.json<{ tier: string }>().tier).toBe("starter");
+    expect(res.statusCode).toBe(503);
+    expect(res.json<{ error: { code: string } }>().error.code).toBe("TENANT_NOT_PROVISIONED");
   });
 
   it("defaults to ReadOnly role when no role assignment found", async () => {

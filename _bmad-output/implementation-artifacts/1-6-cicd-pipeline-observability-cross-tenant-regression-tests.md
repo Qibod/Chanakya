@@ -580,7 +580,7 @@ fastify.addHook("preHandler", async (request, reply) => {
       // Bind tenant + actor context to the request logger
       if (!reply.sent && request.tenant) {
         request.log = request.log.child({
-          tenantId: request.tenant.id,
+          tenantId: request.tenant.tenantId,
           actor: (request as { auth?: { userId?: string } }).auth?.userId,
         });
       }

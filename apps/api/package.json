@@ -17,6 +17,7 @@
     "@fastify/cors": "^10.0.0",
     "@fastify/rate-limit": "^10.0.0",
     "@google-cloud/tasks": "^6.2.2",
+    "@grc/ai": "workspace:*",
     "@grc/config": "workspace:*",
     "@grc/db": "workspace:*",
     "@grc/types": "workspace:*",

@@ -5,6 +5,9 @@ import { prisma, provisionTenantSchema, tenantSchemaName } from "@grc/db";
 import type { TenantId } from "@grc/types";
 import { redis } from "../../plugins/redis.js";
 
+/** Canonical Redis cache key for tenant RBAC data. Format: rbac:{tenantId}:{userId} */
+export const rbacCacheKey = (tenantId: string, userId: string) => `rbac:${tenantId}:${userId}`;
+
 type SvixHeaders = {
   "svix-id": string;
   "svix-timestamp": string;
@@ -110,8 +113,16 @@ async function handleWebhookEvent(event: WebhookEvent, fastify: FastifyInstance)
         `DELETE FROM "${schema}".role_assignments WHERE user_id = $1`,
         userId
       );
-      await redis.del(`rbac:${tenantId}:${userId}`);
+      await redis.del(rbacCacheKey(tenantId, userId));
       fastify.log.info({ tenantId, userId }, "User membership deleted");
+      break;
+    }
+
+    case "organization.deleted": {
+      // TODO Story 1.x: full tenant offboarding (schema drop, GCS cleanup, billing stop).
+      // For now, log and alert so ops can action manually — silent inaction would leave orphaned data.
+      const org = event.data;
+      fastify.log.warn({ tenantId: org.id }, "organization.deleted received — manual offboarding required");
       break;
     }
 
@@ -132,7 +143,7 @@ async function handleWebhookEvent(event: WebhookEvent, fastify: FastifyInstance)
           `UPDATE "${schema}".users SET active = FALSE, updated_at = NOW() WHERE id = $1`,
           userId
         );
-        await redis.del(`rbac:${tenantId}:${userId}`);
+        await redis.del(rbacCacheKey(tenantId, userId));
       }
       fastify.log.info({ userId }, "User deleted, sessions flushed");
       break;

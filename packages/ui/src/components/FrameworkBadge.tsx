@@ -18,7 +18,7 @@ const frameworkBadgeVariants = cva(
         lg: "px-2.5 py-1 text-[12px]",
       },
     },
-    defaultVariants: { size: "md" },
+    defaultVariants: { framework: "SOC2", size: "md" },
   }
 );
 

@@ -97,21 +97,45 @@ describe("GET /v1/users", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("returns user list for OrgAdmin", async () => {
+  it("returns paginated user list for OrgAdmin", async () => {
     vi.mocked(prisma.$queryRawUnsafe)
       .mockResolvedValueOnce([{ tier: "growth" }] as never)
       .mockResolvedValueOnce([{ role: "OrgAdmin" }] as never)
       .mockResolvedValueOnce([
         { id: "user_1", email: "alice@example.com", name: "Alice", active: true, role: "AuditDirector" },
         { id: "user_2", email: "bob@example.com", name: "Bob", active: false, role: "ControlOwner" },
-      ] as never);
+      ] as never)
+      .mockResolvedValueOnce([{ count: "2" }] as never);
     const app = buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/users" });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ data: Array<{ id: string; role: string; active: boolean }> }>();
+    const body = res.json<{
+      data: Array<{ id: string; role: string; active: boolean }>;
+      pagination: { limit: number; offset: number; total: number };
+    }>();
     expect(body.data).toHaveLength(2);
     expect(body.data[0]!.id).toBe("user_1");
     expect(body.data[1]!.active).toBe(false);
+    expect(body.pagination).toEqual({ limit: 50, offset: 0, total: 2 });
+  });
+
+  it("respects limit and offset query params", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([{ tier: "growth" }] as never)
+      .mockResolvedValueOnce([{ role: "OrgAdmin" }] as never)
+      .mockResolvedValueOnce([
+        { id: "user_2", email: "bob@example.com", name: "Bob", active: false, role: "ControlOwner" },
+      ] as never)
+      .mockResolvedValueOnce([{ count: "5" }] as never);
+    const app = buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/users?limit=1&offset=1" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{
+      data: Array<{ id: string }>;
+      pagination: { limit: number; offset: number; total: number };
+    }>();
+    expect(body.data).toHaveLength(1);
+    expect(body.pagination).toEqual({ limit: 1, offset: 1, total: 5 });
   });
 });
 

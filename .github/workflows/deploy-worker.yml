@@ -29,6 +29,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
 
       - uses: actions/setup-node@v4
         with:
@@ -63,4 +65,6 @@ jobs:
           gcloud run jobs update ${{ vars.CLOUD_RUN_WORKER_JOB }} \
             --image ${{ env.IMAGE }}:${{ github.sha }} \
             --region ${{ env.GCP_REGION }} \
-            --project ${{ env.GCP_PROJECT_ID }}
+            --project ${{ env.GCP_PROJECT_ID }} \
+            --set-env-vars="REDIS_URL=redis://10.104.22.115:6379" \
+            --set-secrets="DATABASE_URL=grc-database-url-staging:latest,SENTRY_DSN=grc-sentry-dsn-staging:latest"

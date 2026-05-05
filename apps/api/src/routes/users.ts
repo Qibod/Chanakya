@@ -5,6 +5,7 @@ import { requireRole } from "../middleware/rbac.js";
 import { authenticate } from "../middleware/auth.js";
 import { tenantMiddleware } from "../middleware/tenant.js";
 import { redis } from "../plugins/redis.js";
+import { rbacCacheKey } from "./webhooks/clerk.js";
 import type { TenantId, UserRole } from "@grc/types";
 
 export async function userRoutes(fastify: FastifyInstance): Promise<void> {
@@ -22,22 +23,50 @@ export async function userRoutes(fastify: FastifyInstance): Promise<void> {
     }
   );
 
-  // GET /v1/users — list all users in tenant with their roles (OrgAdmin only)
+  // GET /v1/users — paginated list of users in tenant with their roles (AuditDirector+)
   fastify.get(
     "/v1/users",
-    { preHandler: [authenticate, tenantMiddleware, requireRole("OrgAdmin")] },
+    { preHandler: [authenticate, tenantMiddleware, requireRole("AuditDirector")] },
     async (request) => {
       const schema = request.tenant.schemaName;
-      const users = await (prisma.$queryRawUnsafe as (sql: string) => Promise<Array<{
-        id: string; email: string; name: string; active: boolean; role: string | null;
-      }>>)(
-        `SELECT u.id, u.email, u.name, u.active, ra.role
-         FROM "${schema}".users u
-         LEFT JOIN "${schema}".role_assignments ra
-           ON ra.user_id = u.id AND ra.business_unit_id IS NULL
-         ORDER BY u.name ASC`
-      );
-      return { data: users };
+      const q = (
+        request as FastifyRequest<{ Querystring: { limit?: string; offset?: string; role?: string } }>
+      ).query;
+      const limit = Math.min(Math.max(Number(q.limit ?? 50), 1), 100);
+      const offset = Math.max(Number(q.offset ?? 0), 0);
+      const roleFilter = typeof q.role === "string" && q.role.length > 0 ? q.role : null;
+
+      const [users, countRows] = await Promise.all([
+        (prisma.$queryRawUnsafe as (sql: string, ...args: unknown[]) => Promise<Array<{
+          id: string; email: string; name: string; active: boolean; role: string | null;
+        }>>)(
+          `SELECT u.id, u.email, u.name, u.active, ra.role
+           FROM "${schema}".users u
+           LEFT JOIN "${schema}".role_assignments ra
+             ON ra.user_id = u.id AND ra.business_unit_id IS NULL
+           ${roleFilter ? "WHERE ra.role = $3" : ""}
+           ORDER BY u.name ASC
+           LIMIT $1 OFFSET $2`,
+          limit,
+          offset,
+          ...(roleFilter ? [roleFilter] : [])
+        ),
+        (prisma.$queryRawUnsafe as (sql: string, ...args: unknown[]) => Promise<Array<{ count: string }>>)(
+          roleFilter
+            ? `SELECT COUNT(*)::text AS count
+               FROM "${schema}".users u
+               LEFT JOIN "${schema}".role_assignments ra
+                 ON ra.user_id = u.id AND ra.business_unit_id IS NULL
+               WHERE ra.role = $1`
+            : `SELECT COUNT(*)::text AS count FROM "${schema}".users`,
+          ...(roleFilter ? [roleFilter] : [])
+        ),
+      ]);
+
+      return {
+        data: users,
+        pagination: { limit, offset, total: Number(countRows[0]?.count ?? 0) },
+      };
     }
   );
 
@@ -60,7 +89,7 @@ export async function userRoutes(fastify: FastifyInstance): Promise<void> {
         role
       );
 
-      await redis.del(`rbac:${tenantId}:${id}`);
+      await redis.del(rbacCacheKey(tenantId, id));
       fastify.log.info({ tenantId, userId: id, role }, "User role updated");
       return reply.code(200).send({ data: { userId: id, role } });
     }
@@ -87,7 +116,7 @@ export async function userRoutes(fastify: FastifyInstance): Promise<void> {
         userId
       );
 
-      await redis.del(`rbac:${tenantId}:${userId}`);
+      await redis.del(rbacCacheKey(tenantId, userId));
       fastify.log.info({ tenantId, userId }, "User deactivated");
       return reply.code(204).send();
     }

@@ -29,7 +29,16 @@ resource "google_cloud_run_v2_service" "api" {
         name  = "NODE_ENV"
         value = var.environment == "production" ? "production" : "staging"
       }
+    }
 
+    # Direct VPC Egress — required to reach Cloud SQL and Memorystore private IPs.
+    # network/subnetwork must be resource IDs (projects/*/...), not https:// self_links.
+    vpc_access {
+      network_interfaces {
+        network    = var.vpc_network
+        subnetwork = var.vpc_subnetwork
+      }
+      egress = "PRIVATE_RANGES_ONLY"
     }
   }
 
@@ -62,6 +71,16 @@ resource "google_cloud_run_v2_job" "worker" {
           name  = "NODE_ENV"
           value = var.environment == "production" ? "production" : "staging"
         }
+      }
+
+      # Direct VPC Egress for worker — needs Cloud SQL and Memorystore access.
+      # network/subnetwork must be resource IDs (projects/*/...), not https:// self_links.
+      vpc_access {
+        network_interfaces {
+          network    = var.vpc_network
+          subnetwork = var.vpc_subnetwork
+        }
+        egress = "PRIVATE_RANGES_ONLY"
       }
     }
   }

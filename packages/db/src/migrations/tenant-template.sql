@@ -85,7 +85,35 @@ CREATE TABLE control_items (
 CREATE INDEX idx_control_items_framework_refs_gin ON control_items USING GIN (framework_refs);
 
 -- ---------------------------------------------------------------------------
--- 6. control_health_snapshots — append-only (ARCH-4)
+-- 6. control_assignments — assignment history + AI instructions (Story 3.3)
+--     BU-scoped (ARCH-5: nullable business_unit_id)
+-- ---------------------------------------------------------------------------
+CREATE TABLE control_assignments (
+    id                    TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
+    control_item_id        TEXT        NOT NULL REFERENCES control_items(id) ON DELETE CASCADE,
+    assigned_to            TEXT        NOT NULL REFERENCES users(id),
+    assigned_by            TEXT        NOT NULL REFERENCES users(id),
+    due_date               DATE,
+    instruction            TEXT        NOT NULL,
+    instruction_model      TEXT        NOT NULL,
+    instruction_context    JSONB       NOT NULL DEFAULT '{}'::jsonb,
+    instruction_updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_current             BOOLEAN     NOT NULL DEFAULT TRUE,
+    business_unit_id       TEXT,                  -- nullable, ARCH-5
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT control_assignments_pkey PRIMARY KEY (id)
+);
+
+-- Enforce single "current" assignment per control while preserving history.
+CREATE UNIQUE INDEX control_assignments_one_current_per_control
+ON control_assignments(control_item_id)
+WHERE is_current = TRUE;
+
+CREATE INDEX idx_control_assignments_assigned_to ON control_assignments(assigned_to);
+CREATE INDEX idx_control_assignments_control_item_id ON control_assignments(control_item_id);
+
+-- ---------------------------------------------------------------------------
+-- 7. control_health_snapshots — append-only (ARCH-4)
 --    Columns exactly as specified: (id, tenant_id, control_id, status, score, recorded_at)
 -- ---------------------------------------------------------------------------
 CREATE TABLE control_health_snapshots (
@@ -100,10 +128,10 @@ CREATE TABLE control_health_snapshots (
 
 -- Append-only enforcement (ARCH-4)
 REVOKE UPDATE, DELETE ON control_health_snapshots FROM PUBLIC;
-GRANT SELECT, INSERT ON control_health_snapshots TO PUBLIC;
+GRANT SELECT, INSERT ON control_health_snapshots TO app_role;
 
 -- ---------------------------------------------------------------------------
--- 7. evidence_blobs — content-addressed (SHA-256); write-once
+-- 8. evidence_blobs — content-addressed (SHA-256); write-once
 -- ---------------------------------------------------------------------------
 CREATE TABLE evidence_blobs (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
@@ -117,7 +145,7 @@ CREATE TABLE evidence_blobs (
 );
 
 -- ---------------------------------------------------------------------------
--- 8. evidence_items — mutable metadata; BU-scoped (ARCH-5)
+-- 9. evidence_items — mutable metadata; BU-scoped (ARCH-5)
 -- ---------------------------------------------------------------------------
 CREATE TABLE evidence_items (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
@@ -134,7 +162,7 @@ CREATE TABLE evidence_items (
 );
 
 -- ---------------------------------------------------------------------------
--- 9. fingerprint_results — AI inference output (Story 2.1+)
+-- 10. fingerprint_results — AI inference output (Story 2.1+)
 --     status: queued | pending_review | failed | committed
 -- ---------------------------------------------------------------------------
 CREATE TABLE fingerprint_results (
@@ -157,7 +185,7 @@ CREATE TABLE fingerprint_results (
 );
 
 -- ---------------------------------------------------------------------------
--- 10. audit_engagements — BU-scoped (ARCH-5)
+-- 11. audit_engagements — BU-scoped (ARCH-5)
 -- ---------------------------------------------------------------------------
 CREATE TABLE audit_engagements (
     id                  TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
@@ -173,7 +201,7 @@ CREATE TABLE audit_engagements (
 );
 
 -- ---------------------------------------------------------------------------
--- 11. audit_access_tokens — external auditor tokens (ARCH-7)
+-- 12. audit_access_tokens — external auditor tokens (ARCH-7)
 --     UUID v7 generated at application layer; stored as TEXT
 -- ---------------------------------------------------------------------------
 CREATE TABLE audit_access_tokens (
@@ -189,7 +217,7 @@ CREATE TABLE audit_access_tokens (
 );
 
 -- ---------------------------------------------------------------------------
--- 12. risk_items — BU-scoped (ARCH-5)
+-- 13. risk_items — BU-scoped (ARCH-5)
 -- ---------------------------------------------------------------------------
 CREATE TABLE risk_items (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
@@ -206,7 +234,7 @@ CREATE TABLE risk_items (
 );
 
 -- ---------------------------------------------------------------------------
--- 13. findings — audit findings; BU-scoped (ARCH-5)
+-- 14. findings — audit findings; BU-scoped (ARCH-5)
 -- ---------------------------------------------------------------------------
 CREATE TABLE findings (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
@@ -225,7 +253,7 @@ CREATE TABLE findings (
 );
 
 -- ---------------------------------------------------------------------------
--- 14. integration_configs — BU-scoped (ARCH-5)
+-- 15. integration_configs — BU-scoped (ARCH-5)
 -- ---------------------------------------------------------------------------
 CREATE TABLE integration_configs (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
@@ -250,6 +278,7 @@ CREATE INDEX idx_users_inactive            ON users(active) WHERE active = FALSE
 CREATE INDEX idx_control_items_status      ON control_items(status);
 CREATE INDEX idx_control_items_framework   ON control_items(framework);
 CREATE INDEX idx_control_items_assigned_to ON control_items(assigned_to);
+CREATE INDEX idx_control_assignments_is_current ON control_assignments(control_item_id, is_current);
 
 CREATE INDEX idx_evidence_items_control    ON evidence_items(control_item_id);
 CREATE INDEX idx_evidence_items_current    ON evidence_items(control_item_id, is_current);

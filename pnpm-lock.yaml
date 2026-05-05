@@ -46,6 +46,9 @@ importers:
       '@google-cloud/tasks':
         specifier: ^6.2.2
         version: 6.2.2
+      '@grc/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@grc/config':
         specifier: workspace:*
         version: link:../../packages/config

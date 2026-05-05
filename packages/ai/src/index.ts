@@ -5,3 +5,6 @@ export { assertMetadataOnly } from "./guards/metadata-only";
 export { runFingerprintInference } from "./fingerprint-inference";
 export { parseFingerprintJson, extractJsonObject } from "./fingerprint-parse";
 export { buildFingerprintSystemPrompt, buildFingerprintUserPrompt } from "./prompts/fingerprint";
+export type { TaskInstructionsInput } from "./task-instructions";
+export { generateTaskInstructions } from "./task-instructions";
+export { buildTaskInstructionsPrompt } from "./prompts/task-instructions";

@@ -36,6 +36,9 @@ export async function tenantMiddleware(
   const schema = tenantSchemaName(tenantId as TenantId);
   const userId = (request as unknown as { user?: { userId?: string } }).user?.userId ?? "";
 
+  // NOTE: $queryRawUnsafe bypasses Prisma's search_path extension — schema must be
+  // explicit in every query here. Prisma model methods (prisma.tenants.findFirst) do
+  // NOT work across dynamic tenant schemas; raw SQL is intentional.
   const [tierRows, roleRows] = await Promise.all([
     (prisma.$queryRawUnsafe as (sql: string, ...args: unknown[]) => Promise<Array<{ tier: string }>>)(
       `SELECT tier FROM "${schema}".tenants WHERE id = $1 LIMIT 1`,
@@ -47,7 +50,16 @@ export async function tenantMiddleware(
     ),
   ]);
 
-  const tier = (tierRows[0]?.tier ?? "starter") as SubscriptionTier;
+  if (!tierRows[0]) {
+    return reply.code(503).send({
+      error: {
+        code: "TENANT_NOT_PROVISIONED",
+        message: "Tenant schema not found — provisioning may still be in progress",
+      },
+    });
+  }
+
+  const tier = tierRows[0].tier as SubscriptionTier;
   const role = (roleRows[0]?.role ?? "ReadOnly") as UserRole;
 
   if (request.user) {

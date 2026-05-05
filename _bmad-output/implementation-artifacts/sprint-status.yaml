@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-03
-last_updated: 2026-05-05T11:45:00Z
+last_updated: 2026-05-05T17:19:00Z
 project: GRC
 project_key: NOKEY
 tracking_system: file-system
@@ -64,10 +64,10 @@ development_status:
 
   # ─── Epic 3: Compliance Dashboard & Control Operations ───────────────────────
   epic-3: in-progress
-  3-1-control-library-list-view-status-domain-organisation: ready-for-dev
-  3-2-real-time-compliance-dashboard-d1d2-shell: backlog
-  3-3-control-assignment-ai-generated-task-instructions: backlog
-  3-4-control-owner-d4-clarity-first-view-my-tasks: backlog
+  3-1-control-library-list-view-status-domain-organisation: review
+  3-2-real-time-compliance-dashboard-d1d2-shell: review
+  3-3-control-assignment-ai-generated-task-instructions: review
+  3-4-control-owner-d4-clarity-first-view-my-tasks: in-progress
   3-5-gap-remediation-tracking-framework-completion-progress: backlog
   epic-3-retrospective: optional
 

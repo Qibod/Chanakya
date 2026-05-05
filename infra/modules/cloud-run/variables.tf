@@ -24,3 +24,13 @@ variable "worker_image" {
   type    = string
   default = "gcr.io/cloudrun/placeholder"
 }
+
+variable "vpc_network" {
+  type        = string
+  description = "VPC network self-link for Direct VPC Egress (required for Cloud SQL private IP)"
+}
+
+variable "vpc_subnetwork" {
+  type        = string
+  description = "Subnet self-link for Direct VPC Egress"
+}

@@ -118,6 +118,8 @@ export const listControlsResponseSchema = z.object({
       name: z.string(),
       domain: z.string(),
       status: z.string(),
+      assignedTo: z.string().nullable(),
+      updatedAt: z.string().nullable(),
       framework: z.string(),
       frameworkRefs: z.array(z.string()),
     })
@@ -127,3 +129,19 @@ export const listControlsResponseSchema = z.object({
 });
 
 export type ListControlsResponse = z.infer<typeof listControlsResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Story 3.3: Control assignment (Audit Director)
+// ---------------------------------------------------------------------------
+
+export const postControlAssignBodySchema = z.object({
+  assignedTo: z.string().min(1),
+  /** ISO date: YYYY-MM-DD (stored as DATE). */
+  dueDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid dueDate (expected YYYY-MM-DD)")
+    .nullable()
+    .optional(),
+});
+
+export type PostControlAssignBody = z.infer<typeof postControlAssignBodySchema>;

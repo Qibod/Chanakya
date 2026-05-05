@@ -21,6 +21,10 @@
   --status-pass-bg: #14532d;
   --status-warn-bg: #451a03;
   --status-fail-bg: #450a0a;
+  --status-auto: #818cf8;
+  --status-auto-bg: #1e1b4b;
+  --status-pending: #a1a1aa;
+  --status-pending-bg: #27272a;
 }
 
 /* Light mode */
@@ -35,6 +39,16 @@
   --accent-hover: #4338ca;
   --border-subtle: #e4e4e7;
   --border-default: #d4d4d8;
+  --status-pass: #15803d;
+  --status-warn: #b45309;
+  --status-fail: #b91c1c;
+  --status-auto: #4338ca;
+  --status-pending: #52525b;
+  --status-pass-bg: #dcfce7;
+  --status-warn-bg: #fef3c7;
+  --status-fail-bg: #fee2e2;
+  --status-auto-bg: #e0e7ff;
+  --status-pending-bg: #f4f4f5;
 }
 
 /* ===== Semantic Tailwind utilities via @theme inline ===== */
@@ -56,6 +70,10 @@
   --color-status-pass-bg: var(--status-pass-bg);
   --color-status-warn-bg: var(--status-warn-bg);
   --color-status-fail-bg: var(--status-fail-bg);
+  --color-status-auto: var(--status-auto);
+  --color-status-auto-bg: var(--status-auto-bg);
+  --color-status-pending: var(--status-pending);
+  --color-status-pending-bg: var(--status-pending-bg);
 }
 
 /* Fingerprint stream line entrance (Story 2.2) */

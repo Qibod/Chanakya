@@ -27,6 +27,11 @@ export const ROLE_SATISFIES: Record<UserRole, ReadonlyArray<UserRole>> = {
   AuditDirector: ["AuditDirector", "ControlOwner", "ReadOnly"],
   ControlOwner: ["ControlOwner", "ReadOnly"],
   ReadOnly: ["ReadOnly"],
+  // Deliberate isolation: these roles are lateral, not hierarchical.
+  // BoardExecutive sees board-level views; ExternalAuditor sees audit-scoped views only;
+  // Developer accesses platform tooling. None satisfies ReadOnly (or any core RBAC role)
+  // because cross-role access would break the audit-isolation model.
+  // Do NOT add ReadOnly here without a security review.
   BoardExecutive: ["BoardExecutive"],
   ExternalAuditor: ["ExternalAuditor"],
   Developer: ["Developer"],

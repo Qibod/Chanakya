@@ -1,6 +1,6 @@
 # Story 3.1: Control Library — List View, Status & Domain Organisation
 
-Status: ready-for-dev
+Status: review
 
 <!-- Ultimate context engine analysis completed — comprehensive developer guide created -->
 
@@ -32,51 +32,51 @@ so that I can scan my compliance posture at a glance and know where to focus.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Extend Controls API payload to support list view needs** (AC: #1, #2)  
-  - [ ] Update `GET /v1/controls` in [`apps/api/src/routes/v1/frameworks.ts`](../../../apps/api/src/routes/v1/frameworks.ts) to include the fields needed by the `/controls` UI:
+- [x] **Task 1 — Extend Controls API payload to support list view needs** (AC: #1, #2)  
+  - [x] Update `GET /v1/controls` in [`apps/api/src/routes/v1/frameworks.ts`](../../../apps/api/src/routes/v1/frameworks.ts) to include the fields needed by the `/controls` UI:
     - `updatedAt` (ISO 8601) from `control_items.updated_at`
     - `assignedTo` (nullable) from `control_items.assigned_to`
-  - [ ] Keep API envelope consistent: `{ data: { total, items, nextCursor } }` and structured errors `{ error: { code, message, details? } }`.
-  - [ ] (If needed) add lightweight server-side filtering query params later, but for this story **client-side filtering is acceptable** because the UI already requests `limit=500`.
+  - [x] Keep API envelope consistent: `{ data: { total, items, nextCursor } }` and structured errors `{ error: { code, message, details? } }`.
+  - [x] (If needed) add lightweight server-side filtering query params later, but for this story **client-side filtering is acceptable** because the UI already requests `limit=500`.
 
-- [ ] **Task 2 — Control list grouped by domain with collapsible sections** (AC: #1)  
-  - [ ] Update [`apps/web/src/features/controls/ControlLibraryClient.tsx`](../../../apps/web/src/features/controls/ControlLibraryClient.tsx) to:
+- [x] **Task 2 — Control list grouped by domain with collapsible sections** (AC: #1)  
+  - [x] Update [`apps/web/src/features/controls/ControlLibraryClient.tsx`](../../../apps/web/src/features/controls/ControlLibraryClient.tsx) to:
     - Group `controlsQ.data` by `domain` (stable sort domains alphabetically; stable sort rows by `name` within domain).
     - Render each domain as a collapsible section (default: expanded).
     - Persist collapsed state for the session (Zustand is preferred by architecture, but local state is acceptable if contained to this page and non-shared).
-  - [ ] Ensure `prefers-reduced-motion` users still get an accessible, non-animated collapse/expand.
+  - [x] Ensure `prefers-reduced-motion` users still get an accessible, non-animated collapse/expand.
 
-- [ ] **Task 3 — Row content & UI elements** (AC: #1)  
-  - [ ] Replace the current simplified row UI (which only shows `{domain} · {status}`) with:
+- [x] **Task 3 — Row content & UI elements** (AC: #1)  
+  - [x] Replace the current simplified row UI (which only shows `{domain} · {status}`) with:
     - `FrameworkBadge` list (already present)
     - `StatusChip` from `@grc/ui` (map backend `status` string to `StatusChip` variants; unknown → `pending`)
     - **Assigned owner avatar**:
       - For now, a minimal avatar is acceptable: a 24–28px circle with initials + tooltip with owner id/name.
       - If an owner name is not available yet, show a neutral “Unassigned” chip/placeholder.
     - `last-updated` timestamp in compact form (relative for <7 days else absolute) per UX spec.
-  - [ ] Add `aria-label`s so each row is fully understandable to screen readers (status not color-only; avatar has label; timestamp announced).
+  - [x] Add `aria-label`s so each row is fully understandable to screen readers (status not color-only; avatar has label; timestamp announced).
 
-- [ ] **Task 4 — Filters (framework, status, owner) with AND logic + “Clear all”** (AC: #2)  
-  - [ ] Add filter chips above the list:
+- [x] **Task 4 — Filters (framework, status, owner) with AND logic + “Clear all”** (AC: #2)  
+  - [x] Add filter chips above the list:
     - Framework filter reuses existing `frameworkScope` and the activated frameworks list.
     - Add `status` multi-select filter (pass/warn/fail/pending/auto).
     - Add `owner` filter: derive owner options from the loaded items’ `assignedTo` set (plus an explicit “Unassigned” option).
-  - [ ] Apply filters via a single `useMemo` pipeline over the fetched list (AND logic).
-  - [ ] Persist filter state in-session only (no localStorage requirement).
+  - [x] Apply filters via a single `useMemo` pipeline over the fetched list (AND logic).
+  - [x] Persist filter state in-session only (no localStorage requirement).
 
-- [ ] **Task 5 — Side panel must meet Story 3.1 interaction requirements** (AC: #3)  
-  - [ ] Verify the existing panel behavior in `ControlLibraryClient`:
+- [x] **Task 5 — Side panel must meet Story 3.1 interaction requirements** (AC: #3)  
+  - [x] Verify the existing panel behavior in `ControlLibraryClient`:
     - Slides in/out with 200ms transition when motion is enabled (already implemented).
     - Escape closes and focus returns to the triggering row (already implemented via `openerRef` and keydown handler).
-  - [ ] Ensure the panel width is **exactly `400px` max** and does not regress on small viewports.
+  - [x] Ensure the panel width is **exactly `400px` max** and does not regress on small viewports.
 
-- [ ] **Task 6 — Tests** (AC: all)  
-  - [ ] Update/extend [`apps/web/src/features/controls/ControlLibraryClient.test.tsx`](../../../apps/web/src/features/controls/ControlLibraryClient.test.tsx) to cover:
+- [x] **Task 6 — Tests** (AC: all)  
+  - [x] Update/extend [`apps/web/src/features/controls/ControlLibraryClient.test.tsx`](../../../apps/web/src/features/controls/ControlLibraryClient.test.tsx) to cover:
     - Domain grouping + collapse/expand
     - Filter AND logic (framework + status + owner)
     - “Clear all” resets filters
     - Escape closes panel and restores focus (use `@testing-library/user-event` focus assertions)
-  - [ ] Add API test coverage in `apps/api` if a test harness exists for routes; otherwise add focused unit coverage where feasible.
+  - [x] Add API test coverage in `apps/api` if a test harness exists for routes; otherwise add focused unit coverage where feasible.
 
 ## Dev Notes
 
@@ -131,5 +131,28 @@ GPT-5.2
 
 ### Completion Notes List
 
+- ✅ Extended `GET /v1/controls` to return `assignedTo` and `updatedAt` for the control list UI.
+- ✅ Implemented domain-grouped `/controls` list with collapsible sections and session-persisted collapsed state.
+- ✅ Added `StatusChip`, minimal owner avatar/Unassigned badge, and “Last updated” display per row (with accessible labels).
+- ✅ Added multi-filter chips (framework/status/owner) with AND logic and “Clear all”, persisted for the session.
+- ✅ Added/updated tests for grouping, collapsing, AND filtering, and Escape-close focus restoration.
+- ✅ Validated with `pnpm -r test`, plus web/api lint + type-check.
+- ✅ Addressed review findings: updated canonical `@grc/types` schema for list controls, improved row-level screen-reader labeling, and fixed `PATCH /v1/controls/:id` to honor parsed body with tests.
+
 ### File List
+
+- apps/api/src/routes/v1/frameworks.ts
+- apps/api/src/routes/v1/frameworks.test.ts
+- apps/api/src/routes/v1/dashboard.ts
+- apps/web/src/features/controls/ControlLibraryClient.tsx
+- apps/web/src/features/controls/ControlLibraryClient.test.tsx
+- apps/web/src/features/dashboard/DashboardClient.tsx
+- packages/types/src/frameworks-api.ts
+- _bmad-output/implementation-artifacts/3-1-control-library-list-view-status-domain-organisation.md
+- _bmad-output/implementation-artifacts/sprint-status.yaml
+
+### Change Log
+
+- 2026-05-05: Implemented Story 3.1 control library list UI + API payload extensions; added tests and validations.
+- 2026-05-05: Addressed Senior Dev review changes (schema contract, a11y labeling, PATCH correctness).
 

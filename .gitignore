@@ -47,6 +47,13 @@ Thumbs.db
 # Test coverage
 coverage/
 
+# Storybook build output
+storybook-static/
+
+# Local tool config (Claude Code, agents)
+.agents/
+.claude/
+
 # Logs
 *.log
 npm-debug.log*

@@ -14,6 +14,7 @@ import { userRoutes } from "./routes/users.js";
 import { fingerprintRoutes } from "./routes/v1/fingerprint.js";
 import { frameworkRoutes } from "./routes/v1/frameworks.js";
 import { onboardingRoutes } from "./routes/v1/onboarding.js";
+import { dashboardRoutes } from "./routes/v1/dashboard.js";
 import { streamRoutes } from "./routes/v1/stream.js";
 
 /** When true, `request.ip` uses the trusted proxy chain (e.g. Cloud Run / load balancer), not raw client XFF. */
@@ -91,12 +92,20 @@ async function buildServer() {
   await fastify.register(fingerprintRoutes);
   await fastify.register(frameworkRoutes);
   await fastify.register(onboardingRoutes);
+  await fastify.register(dashboardRoutes);
   await fastify.register(streamRoutes);
 
   return fastify;
 }
 
 async function start() {
+  const required = ["CLERK_WEBHOOK_SIGNING_SECRET"];
+  const missing = required.filter((k) => !process.env[k]);
+  if (missing.length > 0) {
+    console.error(`Missing required env vars: ${missing.join(", ")}`);
+    process.exit(1);
+  }
+
   try {
     const server = await buildServer();
     const port = Number(process.env["PORT"] ?? 3001);

@@ -21,6 +21,10 @@
   --status-pass-bg: #14532d;     /* green-950 */
   --status-warn-bg: #451a03;     /* amber-950 */
   --status-fail-bg: #450a0a;     /* red-950 */
+  --status-auto: #818cf8;        /* indigo-400 */
+  --status-auto-bg: #1e1b4b;     /* indigo-950 */
+  --status-pending: #a1a1aa;     /* zinc-400 */
+  --status-pending-bg: #27272a;  /* zinc-800 */
 }
 
 /* ===== Light mode ===== */
@@ -35,7 +39,18 @@
   --accent-hover: #4338ca;       /* indigo-700 */
   --border-subtle: #e4e4e7;      /* zinc-200 */
   --border-default: #d4d4d8;     /* zinc-300 */
-  /* Status tokens are the same across themes */
+  /* Status foreground — darker shades for contrast on light backgrounds */
+  --status-pass: #15803d;        /* green-700 */
+  --status-warn: #b45309;        /* amber-700 */
+  --status-fail: #b91c1c;        /* red-700 */
+  --status-auto: #4338ca;        /* indigo-700 */
+  --status-pending: #52525b;     /* zinc-600 */
+  /* Status backgrounds — light tints instead of deep darks */
+  --status-pass-bg: #dcfce7;     /* green-100 */
+  --status-warn-bg: #fef3c7;     /* amber-100 */
+  --status-fail-bg: #fee2e2;     /* red-100 */
+  --status-auto-bg: #e0e7ff;     /* indigo-100 */
+  --status-pending-bg: #f4f4f5;  /* zinc-100 */
 }
 
 /* ===== Motion: respect prefers-reduced-motion ===== */

@@ -55,6 +55,6 @@ describe("authenticate middleware", () => {
     const body = JSON.parse(res.body);
     expect(body.userId).toBe("user_abc123");
     expect(body.orgId).toBe("org_tenant001");
-    expect(body.role).toBe("ControlOwner");
+    expect(body.role).toBe("ReadOnly"); // safe default before tenantMiddleware overwrites
   });
 });
