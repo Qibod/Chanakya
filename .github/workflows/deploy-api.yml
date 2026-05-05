@@ -8,6 +8,7 @@ on:
       - "packages/db/**"
       - "packages/types/**"
       - "packages/config/**"
+  workflow_dispatch:
 
 env:
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
