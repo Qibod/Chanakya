@@ -22,3 +22,8 @@ export * from "./controls";
 export * from "./audits";
 export * from "./integrations";
 export * from "./jobs";
+export * from "./fingerprint";
+export * from "./fingerprint-confirm";
+export * from "./framework-catalog";
+export * from "./frameworks-api";
+export * from "./onboarding";

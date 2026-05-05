@@ -11,15 +11,17 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@grc/ai": "workspace:*",
     "@grc/config": "workspace:*",
     "@grc/db": "workspace:*",
     "@grc/types": "workspace:*",
-    "@grc/ai": "workspace:*"
+    "@sentry/node": "^10.51.0",
+    "ioredis": "^5.10.1"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
-    "typescript": "^5.6.0",
     "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   }
 }

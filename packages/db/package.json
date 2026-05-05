@@ -14,6 +14,7 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
+    "db:migrate:tenant-fingerprint": "tsx src/scripts/migrate-tenant-fingerprint.ts",
     "db:studio": "prisma studio"
   },
   "dependencies": {
@@ -23,6 +24,7 @@
     "@grc/config": "workspace:*",
     "@grc/types": "workspace:*",
     "prisma": "^6.0.0",
+    "tsx": "^4.0.0",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   },

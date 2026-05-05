@@ -130,8 +130,18 @@ describeWithDb("cross-tenant isolation (requires local DB)", () => {
   it("control_health_snapshots INSERT succeeds (append-only)", async () => {
     const schema = tenantSchemaName(TENANT_A);
     await prisma.$executeRawUnsafe(`
-      INSERT INTO "${schema}".control_items (id, framework, control_code, name, status)
-      VALUES ('ctrl-001', 'SOC2', 'CC1.1', 'Access Control', 'not_started')
+      INSERT INTO "${schema}".control_items
+        (id, canonical_id, framework, control_code, framework_refs, domain, name, status)
+      VALUES (
+        'ctrl-001',
+        'c-test-001',
+        'SOC2',
+        'CC1.1',
+        '["SOC2:CC1.1"]'::jsonb,
+        'Access Control',
+        'Access Control',
+        'pending'
+      )
     `);
     await expect(
       prisma.$executeRawUnsafe(`

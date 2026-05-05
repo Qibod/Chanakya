@@ -11,8 +11,17 @@ import { tenantMiddleware } from "./middleware/tenant.js";
 import redisPlugin from "./plugins/redis.js";
 import { clerkWebhookRoutes } from "./routes/webhooks/clerk.js";
 import { userRoutes } from "./routes/users.js";
+import { fingerprintRoutes } from "./routes/v1/fingerprint.js";
+import { frameworkRoutes } from "./routes/v1/frameworks.js";
+import { onboardingRoutes } from "./routes/v1/onboarding.js";
+import { streamRoutes } from "./routes/v1/stream.js";
+
+/** When true, `request.ip` uses the trusted proxy chain (e.g. Cloud Run / load balancer), not raw client XFF. */
+const trustProxy =
+  process.env["TRUST_PROXY"] === "true" || process.env["NODE_ENV"] === "production";
 
 const fastify = Fastify({
+  trustProxy,
   logger: {
     level: process.env["LOG_LEVEL"] ?? "info",
     ...(process.env["NODE_ENV"] === "development"
@@ -79,6 +88,10 @@ async function buildServer() {
 
   // API routes
   await fastify.register(userRoutes);
+  await fastify.register(fingerprintRoutes);
+  await fastify.register(frameworkRoutes);
+  await fastify.register(onboardingRoutes);
+  await fastify.register(streamRoutes);
 
   return fastify;
 }

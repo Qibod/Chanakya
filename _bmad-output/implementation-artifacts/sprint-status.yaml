@@ -1,5 +1,5 @@
 # generated: 2026-05-03
-# last_updated: 2026-05-03
+# last_updated: 2026-05-05 (closed 2.1, 2.2, 2.5, 2.6; epic-2 done)
 # project: GRC
 # project_key: NOKEY
 # tracking_system: file-system
@@ -35,7 +35,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 
 generated: 2026-05-03
-last_updated: 2026-05-04T18:45:00Z
+last_updated: 2026-05-05T11:45:00Z
 project: GRC
 project_key: NOKEY
 tracking_system: file-system
@@ -53,18 +53,18 @@ development_status:
   epic-1-retrospective: optional
 
   # ─── Epic 2: AI-Native Onboarding & Compliance Framework Library ─────────────
-  epic-2: backlog
-  2-1-ai-fingerprinting-pipeline-backend-job-claude-integration: backlog
-  2-2-fingerprinting-stream-ui-the-aha-moment: backlog
-  2-3-fingerprinting-review-confirmation-framework-commit: backlog
-  2-4-compliance-framework-library-control-activation: backlog
-  2-5-onboarding-checklist-contextual-help: backlog
-  2-6-cross-framework-control-mapping-engine: backlog
+  epic-2: done
+  2-1-ai-fingerprinting-pipeline-backend-job-claude-integration: done
+  2-2-fingerprinting-stream-ui-the-aha-moment: done
+  2-3-fingerprinting-review-confirmation-framework-commit: done
+  2-4-compliance-framework-library-control-activation: done # code review (2026-05-05): audit IP helper, migration backfill pending, narrow ON CONFLICT, tests/409/pagination/tokens/regex/a11y — see story Completion Notes
+  2-5-onboarding-checklist-contextual-help: done
+  2-6-cross-framework-control-mapping-engine: done
   epic-2-retrospective: optional
 
   # ─── Epic 3: Compliance Dashboard & Control Operations ───────────────────────
-  epic-3: backlog
-  3-1-control-library-list-view-status-domain-organisation: backlog
+  epic-3: in-progress
+  3-1-control-library-list-view-status-domain-organisation: ready-for-dev
   3-2-real-time-compliance-dashboard-d1d2-shell: backlog
   3-3-control-assignment-ai-generated-task-instructions: backlog
   3-4-control-owner-d4-clarity-first-view-my-tasks: backlog

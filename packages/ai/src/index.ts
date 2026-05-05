@@ -1,4 +1,7 @@
 export type { AIProvider, LLMRequest, LLMResponse, ModelId } from "./provider";
-export { VertexAIProvider } from "./vertex-ai";
+export { VertexAIProvider, resolveFingerprintModelId } from "./vertex-ai";
 export { assertNoInjection } from "./guards/injection-guard";
 export { assertMetadataOnly } from "./guards/metadata-only";
+export { runFingerprintInference } from "./fingerprint-inference";
+export { parseFingerprintJson, extractJsonObject } from "./fingerprint-parse";
+export { buildFingerprintSystemPrompt, buildFingerprintUserPrompt } from "./prompts/fingerprint";

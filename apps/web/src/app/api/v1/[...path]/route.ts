@@ -25,10 +25,17 @@ async function proxyRequest(
 
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
-    "Content-Type": "application/json",
   };
+  if (method !== "GET" && method !== "DELETE") {
+    headers["Content-Type"] = "application/json";
+  }
 
-  const init: RequestInit = { method, headers, cache: "no-store" };
+  const init: RequestInit = {
+    method,
+    headers,
+    cache: "no-store",
+    signal: request.signal,
+  };
 
   if (method !== "GET" && method !== "DELETE") {
     try {
@@ -51,8 +58,34 @@ async function proxyRequest(
     return new NextResponse(null, { status: 204 });
   }
 
-  const data = await upstream.json();
-  return NextResponse.json(data, { status: upstream.status });
+  const upstreamContentType = upstream.headers.get("content-type") ?? "";
+  if (upstreamContentType.includes("text/event-stream")) {
+    if (!upstream.body) {
+      return NextResponse.json(
+        { error: { code: "STREAM_UNAVAILABLE", message: "Upstream stream has no body" } },
+        { status: 502 }
+      );
+    }
+    const passthroughHeaders = new Headers();
+    passthroughHeaders.set("Content-Type", "text/event-stream");
+    passthroughHeaders.set("Cache-Control", "no-cache");
+    passthroughHeaders.set("Connection", "keep-alive");
+    passthroughHeaders.set("X-Accel-Buffering", "no");
+    return new NextResponse(upstream.body, {
+      status: upstream.status,
+      headers: passthroughHeaders,
+    });
+  }
+
+  try {
+    const data: unknown = await upstream.json();
+    return NextResponse.json(data, { status: upstream.status });
+  } catch {
+    return NextResponse.json(
+      { error: { code: "UPSTREAM_INVALID_RESPONSE", message: "Upstream returned non-JSON body" } },
+      { status: 502 }
+    );
+  }
 }
 
 export async function GET(request: NextRequest, context: RouteContext) {

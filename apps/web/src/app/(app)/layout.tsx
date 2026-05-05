@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { TopNav } from "@/components/layout/TopNav";
+import { OnboardingBanner } from "@/features/onboarding/OnboardingBanner";
 import type { UserRole } from "@grc/types";
 
 async function getUserRole(): Promise<UserRole | undefined> {
@@ -46,7 +47,10 @@ export default async function AppShellLayout({
       {/* Main content + top nav */}
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
         <TopNav />
-        <main id="main-content" className="flex-1 overflow-y-auto p-6">{children}</main>
+        <main id="main-content" className="flex-1 overflow-y-auto p-6">
+          <OnboardingBanner />
+          {children}
+        </main>
       </div>
     </div>
   );

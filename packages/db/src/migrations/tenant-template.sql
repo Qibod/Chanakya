@@ -14,6 +14,8 @@ CREATE TABLE tenants (
     name        TEXT        NOT NULL,
     tier        TEXT        NOT NULL DEFAULT 'starter',
     region      TEXT        NOT NULL DEFAULT 'us-central1',
+    onboarding_dismissed_at TIMESTAMPTZ,
+    onboarding_first_report_completed_at TIMESTAMPTZ,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT tenants_pkey PRIMARY KEY (id)
@@ -60,20 +62,27 @@ CREATE TABLE framework_activations (
 
 -- ---------------------------------------------------------------------------
 -- 5. control_items — BU-scoped (ARCH-5: nullable business_unit_id)
+--     canonical_id + framework_refs: unified cross-framework rows (Story 2.4)
 -- ---------------------------------------------------------------------------
 CREATE TABLE control_items (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
+    canonical_id     TEXT        NOT NULL,
     framework        TEXT        NOT NULL,
     control_code     TEXT        NOT NULL,
+    framework_refs   JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    domain           TEXT        NOT NULL,
     name             TEXT        NOT NULL,
     description      TEXT,
-    status           TEXT        NOT NULL DEFAULT 'not_started',
+    status           TEXT        NOT NULL DEFAULT 'pending',
     assigned_to      TEXT        REFERENCES users(id),
     business_unit_id TEXT,                  -- nullable, ARCH-5
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT control_items_pkey PRIMARY KEY (id)
+    CONSTRAINT control_items_pkey PRIMARY KEY (id),
+    CONSTRAINT control_items_canonical_unique UNIQUE (canonical_id)
 );
+
+CREATE INDEX idx_control_items_framework_refs_gin ON control_items USING GIN (framework_refs);
 
 -- ---------------------------------------------------------------------------
 -- 6. control_health_snapshots — append-only (ARCH-4)
@@ -125,18 +134,26 @@ CREATE TABLE evidence_items (
 );
 
 -- ---------------------------------------------------------------------------
--- 9. fingerprint_results — AI inference output (Story 2.x)
+-- 9. fingerprint_results — AI inference output (Story 2.1+)
+--     status: queued | pending_review | failed | committed
 -- ---------------------------------------------------------------------------
 CREATE TABLE fingerprint_results (
     id               TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
     job_id           TEXT        NOT NULL,
     company_name     TEXT        NOT NULL,
+    status           TEXT        NOT NULL DEFAULT 'queued',
+    failure_reason   TEXT,
     industry         TEXT,
     data             JSONB       NOT NULL DEFAULT '{}',
     confidence_scores JSONB,
     confirmed_at     TIMESTAMPTZ,
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT fingerprint_results_pkey PRIMARY KEY (id)
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT fingerprint_results_pkey PRIMARY KEY (id),
+    CONSTRAINT fingerprint_results_job_id_key UNIQUE (job_id),
+    CONSTRAINT fingerprint_results_status_check CHECK (
+        status IN ('queued', 'pending_review', 'failed', 'committed')
+    )
 );
 
 -- ---------------------------------------------------------------------------
@@ -219,7 +236,10 @@ CREATE TABLE integration_configs (
     business_unit_id TEXT,                  -- nullable, ARCH-5
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT integration_configs_pkey PRIMARY KEY (id)
+    CONSTRAINT integration_configs_pkey PRIMARY KEY (id),
+    CONSTRAINT integration_configs_status_check CHECK (
+        status IN ('disconnected', 'connected', 'pending', 'error')
+    )
 );
 
 -- ---------------------------------------------------------------------------

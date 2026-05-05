@@ -8,11 +8,11 @@
 // ARCH-7: audit_access_tokens — custom UUID v7 token model for external auditors
 //
 // Tables in every tenant schema (14 total):
-//   tenants                    — tenant metadata (name, tier, region)
+//   tenants                    — tenant metadata (name, tier, region; onboarding_dismissed_at, onboarding_first_report_completed_at — Story 2.5)
 //   users                      — Clerk user profiles, synced via webhook
 //   role_assignments  ★BU      — user_id + role + business_unit_id UNIQUE
 //   framework_activations      — active compliance frameworks
-//   control_items     ★BU      — framework, control_code, name, status, assigned_to
+//   control_items     ★BU      — canonical_id UNIQUE, framework_refs JSONB, domain, status default pending
 //   control_health_snapshots   — ARCH-4 append-only: id, tenant_id, control_id, status, score, recorded_at
 //   evidence_blobs             — content-addressed (SHA-256 hash UNIQUE), write-once
 //   evidence_items    ★BU      — FK control_items + evidence_blobs; is_current BOOLEAN

@@ -24,6 +24,8 @@ build/
 !tsconfig*.json
 !turbo.json
 !**/tsconfig*.json
+!vercel.json
+!**/vercel.json
 
 # Terraform state — sensitive, store in GCS backend
 infra/**/*.tfstate
@@ -48,3 +50,6 @@ coverage/
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+#Sentry
+SENTRY_DSN="https://9c94f3a3ac6580a36e1bdb9f0080e438@o4510623908495360.ingest.us.sentry.io/4511333761613824"

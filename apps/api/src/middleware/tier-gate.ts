@@ -1,4 +1,2 @@
-// requireTier() preHandler factory — implemented in Story 1.3
-// Usage: fastify.get('/v1/route', { preHandler: [authenticate, requireTier('growth')] }, handler)
-
-export {};
+/** Re-export tier gate from rbac (single implementation). */
+export { requireTier } from "./rbac.js";
