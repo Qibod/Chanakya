@@ -76,7 +76,8 @@ jobs:
             })
 
       - name: Upload Sentry source maps
-        if: github.ref == 'refs/heads/main' && secrets.SENTRY_AUTH_TOKEN != ''
+        if: github.ref == 'refs/heads/main'
+        continue-on-error: true
         run: |
           pnpm dlx @sentry/cli releases \
             --org ${{ vars.SENTRY_ORG }} \
