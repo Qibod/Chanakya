@@ -74,7 +74,7 @@ async function main(): Promise<void> {
     ORDER BY schema_name
   `;
 
-  const schemas = rows.map((r) => r.schema_name).filter((s) => SCHEMA_PATTERN.test(s));
+  const schemas = rows.map((r: { schema_name: string }) => r.schema_name).filter((s: string) => SCHEMA_PATTERN.test(s));
 
   if (schemas.length === 0) {
     console.log("No tenant_* schemas found.");
