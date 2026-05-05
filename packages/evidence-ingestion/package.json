@@ -20,6 +20,7 @@
   },
   "devDependencies": {
     "@grc/config": "workspace:*",
+    "@grc/db": "workspace:*",
     "typescript": "^5.6.0",
     "vitest": "^2.0.0"
   }

@@ -280,6 +280,9 @@ importers:
       '@grc/config':
         specifier: workspace:*
         version: link:../config
+      '@grc/db':
+        specifier: workspace:*
+        version: link:../db
       typescript:
         specifier: ^5.6.0
         version: 5.9.3
