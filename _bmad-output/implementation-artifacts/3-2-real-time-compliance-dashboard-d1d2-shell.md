@@ -160,7 +160,14 @@ GPT-5.2
 - ✅ Added dashboard read-model endpoint with Redis cache (`GET /v1/dashboard`, 30s TTL).
 - ✅ Implemented dashboard UI shell with health summary, domain grid, and action feed.
 - ✅ Added tenant SSE stream for control health events (`GET /v1/stream/control-health`) and wired client `EventSource` invalidation.
-- ✅ “Fix now” opens a 400px slide-in SidePanel with Escape close and focus restoration.
+- ✅ “Fix now” opens the shared slide-in `ControlSidePanel` (no duplicate panel implementation).
+- ✅ RBAC fixed: `GET /v1/dashboard` is now accessible to `AuditDirector`.
+- ✅ Redis cache correctness: control-health SSE now invalidates the dashboard cache before the client refetch.
+- ✅ Cache safety: dashboard cache-hit path validates the cached payload shape.
+- ✅ Sparkline fixed: 30-day sparkline is now computed from `control_health_snapshots` (not a flat placeholder).
+- ✅ Feed/controls UX fixed: “Assign” buttons are now wired (no-op removed).
+- ✅ FeedItem fixed: failing items are collapsible and `aria-expanded` reflects actual state.
+- ✅ Performance/shape: dashboard feed query is limited to fail/warn rows only.
 - ✅ All tests/lint/type-check pass (`pnpm test`, `pnpm lint`, `pnpm type-check`).
 
 ### File List
@@ -169,6 +176,7 @@ GPT-5.2
 - apps/web/src/features/onboarding/DashboardOnboardingActions.tsx
 - apps/web/src/features/dashboard/DashboardClient.tsx
 - apps/web/src/features/dashboard/DashboardClient.test.tsx
+- apps/web/src/features/controls/ControlSidePanel.tsx
 - apps/api/src/routes/v1/stream.ts
 - apps/api/src/routes/v1/stream.test.ts
 - apps/api/src/routes/v1/dashboard.ts
@@ -179,5 +187,5 @@ GPT-5.2
 
 ### Change Log
 
-- 2026-05-05: Implemented Story 3.2 dashboard read-model + UI shell + SSE updates + panel interactions; added tests and validations.
+- 2026-05-05: Implemented Story 3.2 dashboard read-model + UI shell + SSE updates + panel interactions; addressed review feedback (RBAC, Assign wiring, collapsibility, shared panel reuse, sparkline history, and Redis cache correctness).
 

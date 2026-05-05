@@ -84,9 +84,7 @@ describe("GapsClient", () => {
 
     const createObjectURL = vi.fn(() => "blob:csv");
     const revokeObjectURL = vi.fn();
-    // @ts-expect-error test shim
     global.URL.createObjectURL = createObjectURL;
-    // @ts-expect-error test shim
     global.URL.revokeObjectURL = revokeObjectURL;
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
 

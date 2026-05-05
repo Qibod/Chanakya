@@ -63,12 +63,12 @@ development_status:
   epic-2-retrospective: optional
 
   # ─── Epic 3: Compliance Dashboard & Control Operations ───────────────────────
-  epic-3: in-progress
-  3-1-control-library-list-view-status-domain-organisation: review
-  3-2-real-time-compliance-dashboard-d1d2-shell: review
-  3-3-control-assignment-ai-generated-task-instructions: review
-  3-4-control-owner-d4-clarity-first-view-my-tasks: review
-  3-5-gap-remediation-tracking-framework-completion-progress: review
+  epic-3: done
+  3-1-control-library-list-view-status-domain-organisation: done # code review (2026-05-05): SSE role-guard, owner filter overflow, formatLastUpdated guard, initialsForOwner rename — all patched
+  3-2-real-time-compliance-dashboard-d1d2-shell: done # code review (2026-05-05): AuditDirector RBAC fix, Assign button wired, FeedItem collapsible, SidePanel dedup, Redis cache validation — all patched
+  3-3-control-assignment-ai-generated-task-instructions: done # code review (2026-05-05): 409 on concurrent assignment, VertexAIProvider hoist, fallbackInstruction dedup, assignmentId in response — all patched
+  3-4-control-owner-d4-clarity-first-view-my-tasks: done # code review (2026-05-05): requireTier added, redaction comment removed, evidence_item_id on re-completion, optimistic UI — all patched
+  3-5-gap-remediation-tracking-framework-completion-progress: done # code review (2026-05-05): framework meta crash guard, GapsClient SSE, as-never removed, Assign button conditional, /gaps role gate — all patched
   epic-3-retrospective: optional
 
   # ─── Epic 4: Evidence Collection, Integrations & Immutability ────────────────

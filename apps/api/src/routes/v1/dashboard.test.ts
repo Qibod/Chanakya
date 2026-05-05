@@ -65,22 +65,24 @@ beforeEach(() => {
 
 describe("GET /v1/dashboard", () => {
   it("returns dashboard read model and caches it in redis", async () => {
-    vi.mocked(prisma.$queryRawUnsafe).mockImplementation(async (sql: string) => {
+    (vi.mocked(prisma.$queryRawUnsafe) as unknown as {
+      mockImplementation: (fn: (...args: any[]) => any) => void;
+    }).mockImplementation(async (sql: string, ..._args: any[]) => {
       if (sql.includes(".control_health_snapshots")) {
-        return [] as never;
+        return [];
       }
       if (sql.includes("LIMIT 20")) {
-        return [] as never;
+        return [];
       }
       if (sql.includes("LIMIT 1")) {
-        return [] as never;
+        return [];
       }
       // Summary query: id, domain, status
       return [
         { id: "c1", domain: "Access Control", status: "fail" },
         { id: "c2", domain: "Access Control", status: "pass" },
         { id: "c3", domain: "Change Mgmt", status: "warn" },
-      ] as never;
+      ];
     });
 
     const app = buildApp();

@@ -96,6 +96,52 @@ function computeSparkline30d({
   return dayPassRates.length === 30 ? dayPassRates : Array.from({ length: 30 }).map((_, i) => dayPassRates[i] ?? 0);
 }
 
+function isNumber(n: unknown): n is number {
+  return typeof n === "number" && Number.isFinite(n);
+}
+
+function isDashboardReadModel(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+  const v = value as Record<string, unknown>;
+
+  const summary = v.summary as Record<string, unknown> | undefined;
+  if (!summary || typeof summary !== "object") return false;
+  if (!isNumber(summary.passing) || !isNumber(summary.attention) || !isNumber(summary.failing)) return false;
+  if (!isNumber(summary.passingDeltaWeek)) return false;
+  if (!(summary.trajectoryScore === null || isNumber(summary.trajectoryScore))) return false;
+
+  if (!Array.isArray(v.domains)) return false;
+  for (const d of v.domains) {
+    if (!d || typeof d !== "object") return false;
+    const dom = d as Record<string, unknown>;
+    if (typeof dom.domain !== "string") return false;
+    if (!["pass", "warn", "fail", "pending"].includes(dom.status as string)) return false;
+    if (!isNumber(dom.passRatePct) || !isNumber(dom.controlCount)) return false;
+    if (!Array.isArray(dom.sparkline30d) || dom.sparkline30d.length !== 30) return false;
+    for (const p of dom.sparkline30d) if (!isNumber(p)) return false;
+
+    const topIssue = dom.topIssue;
+    if (topIssue !== null) {
+      if (!topIssue || typeof topIssue !== "object") return false;
+      const ti = topIssue as Record<string, unknown>;
+      if (typeof ti.controlId !== "string" || typeof ti.controlName !== "string") return false;
+      if (!["warn", "fail"].includes(ti.status as string)) return false;
+    }
+  }
+
+  if (!Array.isArray(v.feed)) return false;
+  for (const f of v.feed) {
+    if (!f || typeof f !== "object") return false;
+    const feedItem = f as Record<string, unknown>;
+    if (typeof feedItem.id !== "string") return false;
+    if (!["fail", "warn", "info", "pass"].includes(feedItem.severity as string)) return false;
+    if (typeof feedItem.title !== "string" || typeof feedItem.meta !== "string") return false;
+    if (!(feedItem.controlId === null || typeof feedItem.controlId === "string")) return false;
+  }
+
+  return true;
+}
+
 export async function dashboardRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get(
     "/v1/dashboard",
@@ -110,7 +156,7 @@ export async function dashboardRoutes(fastify: FastifyInstance): Promise<void> {
       if (cached) {
         try {
           const parsed = JSON.parse(cached) as unknown;
-          return reply.send({ data: parsed });
+          if (isDashboardReadModel(parsed)) return reply.send({ data: parsed });
         } catch {
           // fall through on cache parse errors
         }
@@ -274,6 +320,12 @@ export async function dashboardRoutes(fastify: FastifyInstance): Promise<void> {
         })),
         feed,
       };
+      if (!isDashboardReadModel(readModel)) {
+        return reply.code(500).send({
+          error: { code: "DASHBOARD_BUILD_FAILED", message: "Could not validate dashboard read model" },
+        });
+      }
+
       await redis.set(cacheKey, JSON.stringify(readModel), "EX", DASHBOARD_CACHE_TTL_SEC);
       return reply.send({ data: readModel });
     }

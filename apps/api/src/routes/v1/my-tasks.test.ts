@@ -3,9 +3,24 @@ import Fastify, { type FastifyInstance } from "fastify";
 import type { TenantContext, UserContext } from "@grc/types";
 
 vi.mock("@grc/ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@grc/ai")>();
+  const actual = (await importOriginal()) as Record<string, unknown>;
+
+  const stripCodesAndJargon = (text: string): string => {
+    return text
+      .replace(/\bSOC2:\s*[A-Z0-9.\-]+\b/gi, "")
+      .replace(/\bISO27001:\s*[A-Z0-9.\-]+\b/gi, "")
+      .replace(/\bCC\d+(\.\d+)?\b/gi, "")
+      .replace(/\bA\.\d+(\.\d+)*\b/gi, "")
+      .replace(/\battestation\b/gi, "confirmation")
+      .replace(/\boperating effectiveness\b/gi, "day-to-day effectiveness")
+      .replace(/\bcontrol objective\b/gi, "goal")
+      .replace(/\bworkpaper(s)?\b/gi, "record")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  };
   return {
     ...actual,
+    stripCodesAndJargon,
     VertexAIProvider: class VertexAIProvider {
       async complete() {
         return {
