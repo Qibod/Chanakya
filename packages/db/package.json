@@ -13,7 +13,7 @@
     }
   },
   "scripts": {
-    "build": "prisma generate && tsc",
+    "build": "prisma generate && tsc && node -e \"require('fs').cpSync('src/migrations','dist/migrations',{recursive:true})\"",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",
     "test": "vitest run",

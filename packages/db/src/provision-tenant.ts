@@ -4,14 +4,15 @@ import { type Prisma } from "@prisma/client";
 import type { TenantId } from "@grc/types";
 import { prisma } from "./client.js";
 
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+// Accepts UUID-format or Clerk org ID format (org_[A-Za-z0-9]+)
+const TENANT_ID_RE = /^(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|org_[A-Za-z0-9]+)$/i;
 
 export function tenantSchemaName(tenantId: TenantId): string {
   return `tenant_${tenantId.replace(/-/g, "")}`;
 }
 
 export async function provisionTenantSchema(tenantId: TenantId): Promise<void> {
-  if (!UUID_RE.test(tenantId)) {
+  if (!TENANT_ID_RE.test(tenantId)) {
     throw new Error(`Invalid tenantId: ${tenantId}`);
   }
   const schema = tenantSchemaName(tenantId);

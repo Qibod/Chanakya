@@ -89,9 +89,12 @@ async function handleWebhookEvent(event: WebhookEvent, fastify: FastifyInstance)
         email,
         name
       );
+      const clerkRole = membership.role ?? "";
+      const grcRole = clerkRole === "org:admin" ? "AuditDirector" : "ControlOwner";
       await (prisma.$executeRawUnsafe as (sql: string, ...args: unknown[]) => Promise<number>)(
-        `INSERT INTO "${schema}".role_assignments (user_id, role) SELECT $1, 'ControlOwner' WHERE NOT EXISTS (SELECT 1 FROM "${schema}".role_assignments WHERE user_id = $1 AND business_unit_id IS NULL)`,
-        userId
+        `INSERT INTO "${schema}".role_assignments (user_id, role) SELECT $1, $2 WHERE NOT EXISTS (SELECT 1 FROM "${schema}".role_assignments WHERE user_id = $1 AND business_unit_id IS NULL)`,
+        userId,
+        grcRole
       );
       // Track user→tenant mapping for user.deleted lookups
       await (prisma.$executeRawUnsafe as (sql: string, ...args: unknown[]) => Promise<number>)(
@@ -100,6 +103,23 @@ async function handleWebhookEvent(event: WebhookEvent, fastify: FastifyInstance)
         tenantId
       );
       fastify.log.info({ tenantId, userId }, "User membership created");
+      break;
+    }
+
+    case "organizationMembership.updated": {
+      const membership = event.data;
+      const tenantId = membership.organization.id as TenantId;
+      const userId = membership.public_user_data.user_id;
+      const schema = tenantSchemaName(tenantId);
+      const clerkRole = membership.role ?? "";
+      const grcRole = clerkRole === "org:admin" ? "AuditDirector" : "ControlOwner";
+      await (prisma.$executeRawUnsafe as (sql: string, ...args: unknown[]) => Promise<number>)(
+        `UPDATE "${schema}".role_assignments SET role = $2 WHERE user_id = $1 AND business_unit_id IS NULL`,
+        userId,
+        grcRole
+      );
+      await redis.del(rbacCacheKey(tenantId, userId));
+      fastify.log.info({ tenantId, userId, grcRole }, "User membership role updated");
       break;
     }
 
