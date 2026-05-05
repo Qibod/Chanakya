@@ -1,6 +1,6 @@
 import type { PrismaClient } from "@prisma/client";
 import type { BlobStoragePort } from "./storage.js";
-import { ingestEvidenceBlob } from "./ingest.js";
+import { ingestEvidenceBlob, type DbClient } from "./ingest.js";
 
 export type SubmitControlOwnerNoteParams = {
   prisma: PrismaClient;
@@ -22,7 +22,7 @@ export async function submitControlOwnerNoteEvidence(
 ): Promise<{ evidenceItemId: string }> {
   const bytes = Buffer.from(params.evidenceText, "utf8");
 
-  return params.prisma.$transaction(async (tx) => {
+  return params.prisma.$transaction(async (tx: DbClient) => {
     const { evidenceItemId } = await ingestEvidenceBlob({
       db: tx,
       schemaName: params.schemaName,

@@ -38,10 +38,10 @@ export async function ingestEvidenceBlob(
 ): Promise<IngestEvidenceBlobResult> {
   const hash = sha256Hex(params.bytes);
 
-  const existing = await params.db.$queryRawUnsafe<Array<{ id: string }>>(
+  const existing = (await params.db.$queryRawUnsafe(
     `SELECT id FROM "${params.schemaName}".evidence_blobs WHERE content_hash = $1 LIMIT 1`,
     hash
-  );
+  )) as Array<{ id: string }>;
 
   let blobId: string;
   let deduped: boolean;
@@ -68,7 +68,7 @@ export async function ingestEvidenceBlob(
     );
   }
 
-  const inserted = await params.db.$queryRawUnsafe<Array<{ id: string }>>(
+  const inserted = (await params.db.$queryRawUnsafe(
     `INSERT INTO "${params.schemaName}".evidence_items
        (control_item_id, blob_id, file_name, source, source_system_ref, is_current, business_unit_id)
      VALUES ($1, $2, $3, $4, $5, TRUE, $6)
@@ -79,7 +79,7 @@ export async function ingestEvidenceBlob(
     params.source,
     params.sourceSystemRef,
     params.businessUnitId ?? null
-  );
+  )) as Array<{ id: string }>;
 
   const evidenceItemId = inserted[0]?.id;
   if (!evidenceItemId) {
