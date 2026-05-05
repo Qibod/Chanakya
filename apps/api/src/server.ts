@@ -3,6 +3,7 @@ import "./instrument.js";
 import Fastify from "fastify";
 import * as Sentry from "@sentry/node";
 import cors from "@fastify/cors";
+import multipart from "@fastify/multipart";
 import rateLimit from "@fastify/rate-limit";
 import { clerkPlugin } from "@clerk/fastify";
 import rawBody from "fastify-raw-body";
@@ -19,6 +20,8 @@ import { streamRoutes } from "./routes/v1/stream.js";
 import { myTasksRoutes } from "./routes/v1/my-tasks.js";
 import { gapsRoutes } from "./routes/v1/gaps.js";
 import { evidenceItemRoutes } from "./routes/v1/evidence-items.js";
+import { evidenceRoutes } from "./routes/v1/evidence.js";
+import { adminRoutes } from "./routes/admin.js";
 
 /** When true, `request.ip` uses the trusted proxy chain (e.g. Cloud Run / load balancer), not raw client XFF. */
 const trustProxy =
@@ -46,6 +49,13 @@ async function buildServer() {
   // Plugins
   await fastify.register(cors, {
     origin: process.env["ALLOWED_ORIGINS"]?.split(",") ?? ["http://localhost:3000"],
+  });
+
+  // Multipart uploads (Story 4.2)
+  await fastify.register(multipart, {
+    limits: {
+      files: 1,
+    },
   });
 
   await fastify.register(rateLimit, {
@@ -99,7 +109,11 @@ async function buildServer() {
   await fastify.register(myTasksRoutes);
   await fastify.register(gapsRoutes);
   await fastify.register(evidenceItemRoutes);
+  await fastify.register(evidenceRoutes);
   await fastify.register(streamRoutes);
+
+  // Admin routes — gated by ADMIN_PROVISION_SECRET header, outside /v1/* auth chain
+  await fastify.register(adminRoutes);
 
   return fastify;
 }
