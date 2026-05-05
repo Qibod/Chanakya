@@ -17,10 +17,14 @@ COPY . .
 RUN pnpm --filter @grc/api build
 
 FROM node:20-alpine AS runner
-WORKDIR /app
 ENV NODE_ENV=production
-COPY --from=builder /app/apps/api/dist ./dist
-COPY --from=builder /app/apps/api/package.json ./
-COPY --from=builder /app/node_modules ./node_modules
+# Mirror the monorepo structure so pnpm symlinks resolve correctly:
+# node_modules resolution walks up from /app/apps/api/dist → finds packages
+# in /app/apps/api/node_modules and /app/node_modules.
+COPY --from=builder /app/node_modules /app/node_modules
+COPY --from=builder /app/apps/api/node_modules /app/apps/api/node_modules
+COPY --from=builder /app/apps/api/dist /app/apps/api/dist
+COPY --from=builder /app/apps/api/package.json /app/apps/api/package.json
+WORKDIR /app/apps/api
 EXPOSE 3001
 CMD ["node", "dist/server.js"]
