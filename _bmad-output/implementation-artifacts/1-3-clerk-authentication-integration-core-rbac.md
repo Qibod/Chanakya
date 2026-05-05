@@ -360,7 +360,9 @@ async function handleUserDeleted(data: DeletedObjectJSON) {
 **IMPORTANT — User-to-Tenant Mapping Problem:**
 `user.deleted` fires with only the `userId` — there's no `orgId` in the payload. To update the correct tenant schema, we need a mapping table in the public schema: `user_tenant_map (user_id, tenant_id)`. Add this to the first Prisma migration or as a new migration.
 
-**Resolution:** Add `UserTenantMap` model to `packages/db/prisma/schema.prisma` and create a new Prisma migration `20260504000002_user_tenant_map`. This table is populated by `organizationMembership.created` and cleaned by `organizationMembership.deleted`.
+> **Note (Story 1.1 scope creep):** The `UserTenantMap` model was forward-committed in Story 1.1's schema.prisma to unblock the overall skeleton. When implementing Story 1.3, **verify this model already exists** in `packages/db/prisma/schema.prisma` before adding it. Do not create a duplicate migration — only add `20260504000002_user_tenant_map` if the table does not yet exist in the database.
+
+**Resolution:** Add `UserTenantMap` model to `packages/db/prisma/schema.prisma` (if not already present) and create a new Prisma migration `20260504000002_user_tenant_map`. This table is populated by `organizationMembership.created` and cleaned by `organizationMembership.deleted`.
 
 ### UserTenantMap — New Prisma Migration
 

@@ -8,6 +8,7 @@ import "./instrument.js";
  * Job types: fingerprint | report-generate | evidence-sync | regulatory-scan | integration-poll
  */
 import * as Sentry from "@sentry/node";
+import { timingSafeEqual } from "node:crypto";
 import http from "node:http";
 import type { FingerprintTaskPayload } from "./jobs/fingerprint.job.js";
 import { processFingerprintJob } from "./jobs/fingerprint.job.js";
@@ -16,11 +17,13 @@ const PORT = Number(process.env["PORT"] ?? 3002);
 
 function verifyWorkerSecret(req: http.IncomingMessage): boolean {
   const secret = process.env["WORKER_INVOCATION_SECRET"];
-  if (!secret) {
-    return true;
-  }
+  if (!secret) return true;
   const header = req.headers["x-worker-secret"];
-  return header === secret;
+  if (typeof header !== "string") return false;
+  const a = Buffer.from(header);
+  const b = Buffer.from(secret);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 const server = http.createServer((req, res) => {
