@@ -1,11 +1,11 @@
 import { describe, it, expect } from "vitest";
-import type { FingerprintInferencePayload } from "./fingerprint.js";
+import type { FingerprintInferencePayload } from "./fingerprint";
 import {
   applyFingerprintConfirmEdits,
   assertValidFingerprintPayload,
   canRemoveFingerprintStreamLine,
   parseFingerprintLineOverride,
-} from "./fingerprint-confirm.js";
+} from "./fingerprint-confirm";
 
 function samplePayload(): FingerprintInferencePayload {
   return {

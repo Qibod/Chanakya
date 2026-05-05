@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   fingerprintInferencePayloadSchema,
   postFingerprintBodySchema,
-} from "./fingerprint.js";
+} from "./fingerprint";
 
 describe("fingerprint schemas", () => {
   it("accepts a valid inference payload", () => {

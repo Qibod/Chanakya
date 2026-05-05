@@ -3,7 +3,7 @@ import {
   postFrameworkActivateBodySchema,
   validateFrameworkSelectionCount,
   maxFrameworkSelectionsForTier,
-} from "./frameworks-api.js";
+} from "./frameworks-api";
 
 describe("validateFrameworkSelectionCount", () => {
   it("starter allows 1", () => {

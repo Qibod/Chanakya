@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { FRAMEWORK_IDS } from "./framework-catalog.js";
-import type { SubscriptionTier } from "./rbac.js";
-import { TIER_ORDER } from "./rbac.js";
+import { FRAMEWORK_IDS } from "./framework-catalog";
+import type { SubscriptionTier } from "./rbac";
+import { TIER_ORDER } from "./rbac";
 
 export const frameworkIdSchema = z.enum([
   "SOC2",

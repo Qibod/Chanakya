@@ -1,4 +1,4 @@
-import type { FingerprintInferencePayload } from "./fingerprint.js";
+import type { FingerprintInferencePayload } from "./fingerprint";
 
 /** Aligns with `@grc/ui` FrameworkBadge variants. */
 export const FRAMEWORK_IDS = [

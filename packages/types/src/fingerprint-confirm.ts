@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { FingerprintInferencePayload, FingerprintSlice } from "./fingerprint.js";
-import { fingerprintInferencePayloadSchema } from "./fingerprint.js";
+import type { FingerprintInferencePayload, FingerprintSlice } from "./fingerprint";
+import { fingerprintInferencePayloadSchema } from "./fingerprint";
 
 /** Max overrides entries / removed ids accepted per confirm request (DoS guard). */
 export const FINGERPRINT_CONFIRM_MAX_KEYS = 128;

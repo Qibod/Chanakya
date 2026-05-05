@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { ROLE_SATISFIES, TIER_ORDER, UserRole, SubscriptionTier } from "./rbac.js";
+import { ROLE_SATISFIES, TIER_ORDER, UserRole, SubscriptionTier } from "./rbac";
 
 describe("ROLE_SATISFIES", () => {
   it("ControlOwner does NOT satisfy AuditDirector", () => {

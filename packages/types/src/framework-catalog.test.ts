@@ -12,8 +12,8 @@ import {
   parseFrameworkRefsArray,
   sharedControlsCountForFramework,
   estimatedGapsForFramework,
-} from "./framework-catalog.js";
-import { fingerprintInferencePayloadSchema } from "./fingerprint.js";
+} from "./framework-catalog";
+import { fingerprintInferencePayloadSchema } from "./fingerprint";
 
 describe("mergeCanonicalControlsForFrameworks", () => {
   it("dedupes shared canonical across SOC2 + ISO27001", () => {
