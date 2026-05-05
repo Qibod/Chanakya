@@ -128,7 +128,7 @@ CREATE TABLE control_health_snapshots (
 
 -- Append-only enforcement (ARCH-4)
 REVOKE UPDATE, DELETE ON control_health_snapshots FROM PUBLIC;
-GRANT SELECT, INSERT ON control_health_snapshots TO app_role;
+DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') THEN GRANT SELECT, INSERT ON control_health_snapshots TO app_role; END IF; END $$;
 
 -- ---------------------------------------------------------------------------
 -- 8. evidence_blobs — content-addressed (SHA-256); write-once
@@ -146,7 +146,7 @@ CREATE TABLE evidence_blobs (
 
 -- Append-only enforcement — blob rows are insert-only (Story 4.1)
 REVOKE UPDATE, DELETE ON evidence_blobs FROM PUBLIC;
-GRANT SELECT, INSERT ON evidence_blobs TO app_role;
+DO $$ BEGIN IF EXISTS (SELECT FROM pg_roles WHERE rolname = 'app_role') THEN GRANT SELECT, INSERT ON evidence_blobs TO app_role; END IF; END $$;
 
 -- ---------------------------------------------------------------------------
 -- 9. evidence_items — mutable metadata; BU-scoped (ARCH-5)
