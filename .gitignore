@@ -26,6 +26,7 @@ build/
 !**/tsconfig*.json
 !vercel.json
 !**/vercel.json
+!packages/config/**/*.json
 
 # Terraform state — sensitive, store in GCS backend
 infra/**/*.tfstate
