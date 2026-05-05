@@ -92,6 +92,17 @@ so that I can complete my daily check-in in under 60 seconds.
     - SSE event updates cached data (simulate EventSource messages)
   - [x] Add/update API tests (if harness exists) for SSE endpoint shape and RBAC gating.
 
+### Review Findings
+
+- [ ] [Review][Patch] RBAC gate on `GET /v1/dashboard` is `requireRole("OrgAdmin")` — AuditDirector (the primary dashboard persona) is locked out. Fix: change `dashboardPreHandlers` to use `requireRole("AuditDirector")` so that both AuditDirector and OrgAdmin (via hierarchy) can access the endpoint. [`apps/api/src/routes/v1/dashboard.ts:7`]
+- [ ] [Review][Patch] "Assign" button in `ControlDomainCard` and `FeedItem` has no `onClick` handler — it is visually present but completely non-functional. AC4 requires both "Fix now" and "Assign" to be actionable. Fix: wire "Assign" to open the assignment modal (to be implemented in Story 3.3, but the button must at minimum not be a dead end). [`apps/web/src/features/dashboard/DashboardClient.tsx:145,195`]
+- [ ] [Review][Patch] `FeedItem` fail items are never collapsible — `expanded = open || item.severity === "fail"` means the toggle cannot collapse a failing item, and `aria-expanded` is permanently `true`. Fix: remove the `|| item.severity === "fail"` from the `expanded` derivation; keep `useState(item.severity === "fail")` for the initial default. [`apps/web/src/features/dashboard/DashboardClient.tsx:162`]
+- [ ] [Review][Patch] Duplicate SidePanel implementation in `DashboardClient` instead of reusing `ControlSidePanel` from Story 3.1 — 80+ lines of bespoke panel logic duplicated. Story 3.2 spec says "Reuse the established SidePanel interaction from Story 3.1". Refactor to import `ControlSidePanel` and pass `showAssign={false}` (until 3.3 ships). [`apps/web/src/features/dashboard/DashboardClient.tsx:411-471`]
+- [ ] [Review][Patch] Redis cache hit path has no schema validation — `JSON.parse(cached) as unknown` is sent directly to the client without validation. A stale schema after a deploy will return malformed data silently. Fix: add a Zod parse of the cached value and fall through to the live query on parse failure. [`apps/api/src/routes/v1/dashboard.ts:32-39`]
+- [x] [Review][Defer] `sparkline30d` is a flat constant (current passRatePct × 30) — not real 30-day history. AC2 requires ECGPulse sparkline with historical trend. Requires a server-side time-series store; deferred to a dedicated history story.
+- [x] [Review][Defer] Dashboard source query fetches all control rows without a LIMIT — for tenants with 500 controls this is a full-table scan each 30s cache miss. Deferred; optimise feed query to `WHERE status IN ('fail','warn') LIMIT 20` and keep full-table only for summary counts.
+- [x] [Review][Defer] `closePanel` setTimeout(220ms) race — if a second "Fix now" is triggered before 220ms, `openerRef` is overwritten before the timeout fires. Pre-existing interaction edge-case; deferred.
+
 ## Dev Notes
 
 ### Story source of truth

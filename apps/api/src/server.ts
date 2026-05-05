@@ -16,6 +16,9 @@ import { frameworkRoutes } from "./routes/v1/frameworks.js";
 import { onboardingRoutes } from "./routes/v1/onboarding.js";
 import { dashboardRoutes } from "./routes/v1/dashboard.js";
 import { streamRoutes } from "./routes/v1/stream.js";
+import { myTasksRoutes } from "./routes/v1/my-tasks.js";
+import { gapsRoutes } from "./routes/v1/gaps.js";
+import { evidenceItemRoutes } from "./routes/v1/evidence-items.js";
 
 /** When true, `request.ip` uses the trusted proxy chain (e.g. Cloud Run / load balancer), not raw client XFF. */
 const trustProxy =
@@ -93,6 +96,9 @@ async function buildServer() {
   await fastify.register(frameworkRoutes);
   await fastify.register(onboardingRoutes);
   await fastify.register(dashboardRoutes);
+  await fastify.register(myTasksRoutes);
+  await fastify.register(gapsRoutes);
+  await fastify.register(evidenceItemRoutes);
   await fastify.register(streamRoutes);
 
   return fastify;

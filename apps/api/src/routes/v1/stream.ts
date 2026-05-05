@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { requireRole, requireTier } from "../../middleware/rbac.js";
 import { createRedisSubscriber } from "../../lib/redis-subscriber.js";
+import { redis } from "../../plugins/redis.js";
 
 /**
  * SSE subscription for async job events on `tenant:{tenantId}:job:{jobId}`.
@@ -8,6 +9,7 @@ import { createRedisSubscriber } from "../../lib/redis-subscriber.js";
  */
 const fingerprintStreamPreHandlers = [requireTier("starter"), requireRole("ControlOwner")];
 const controlHealthStreamPreHandlers = [requireTier("starter"), requireRole("AuditDirector")];
+const DASHBOARD_CACHE_PREFIX = "grc:dashboard:";
 
 export async function streamRoutes(fastify: FastifyInstance): Promise<void> {
   fastify.get(
@@ -116,6 +118,7 @@ export async function streamRoutes(fastify: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const tenantId = request.tenant.tenantId;
       const channel = `tenant:${tenantId}:control-health`;
+      const dashboardCacheKey = `${DASHBOARD_CACHE_PREFIX}${tenantId}`;
       const sub = createRedisSubscriber();
 
       try {
@@ -130,13 +133,18 @@ export async function streamRoutes(fastify: FastifyInstance): Promise<void> {
         });
       }
 
-      const onMessage = (_ch: string, message: string) => {
+      const onMessage = async (_ch: string, message: string) => {
         try {
           const parsed = JSON.parse(message) as {
             event?: string;
             data?: { tenantId?: string; payload?: unknown; timestamp?: string };
           };
           const ev = parsed.event ?? "message";
+
+          if (ev === "control.degraded" || ev === "control.passed") {
+            await redis.del(dashboardCacheKey);
+          }
+
           const dataStr = JSON.stringify(
             parsed.data ?? {
               tenantId,

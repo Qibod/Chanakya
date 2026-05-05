@@ -36,7 +36,7 @@ import { dashboardRoutes } from "./dashboard.js";
 const TENANT_ID = "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa";
 const SCHEMA = `tenant_${TENANT_ID.replace(/-/g, "")}`;
 
-function buildApp(role: UserContext["role"] = "OrgAdmin"): FastifyInstance {
+function buildApp(role: UserContext["role"] = "AuditDirector"): FastifyInstance {
   const app = Fastify({ logger: false });
   app.decorateRequest("user", null as unknown as UserContext);
   app.decorateRequest("tenant", null as never);
@@ -65,13 +65,23 @@ beforeEach(() => {
 
 describe("GET /v1/dashboard", () => {
   it("returns dashboard read model and caches it in redis", async () => {
-    vi.mocked(prisma.$queryRawUnsafe).mockResolvedValueOnce(
-      [
-        { id: "c1", name: "A", domain: "Access Control", status: "fail" },
-        { id: "c2", name: "B", domain: "Access Control", status: "pass" },
-        { id: "c3", name: "C", domain: "Change Mgmt", status: "warn" },
-      ] as never
-    );
+    vi.mocked(prisma.$queryRawUnsafe).mockImplementation(async (sql: string) => {
+      if (sql.includes(".control_health_snapshots")) {
+        return [] as never;
+      }
+      if (sql.includes("LIMIT 20")) {
+        return [] as never;
+      }
+      if (sql.includes("LIMIT 1")) {
+        return [] as never;
+      }
+      // Summary query: id, domain, status
+      return [
+        { id: "c1", domain: "Access Control", status: "fail" },
+        { id: "c2", domain: "Access Control", status: "pass" },
+        { id: "c3", domain: "Change Mgmt", status: "warn" },
+      ] as never;
+    });
 
     const app = buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/dashboard" });

@@ -1,15 +1,19 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { FrameworkBadge, StatusChip } from "@grc/ui";
 import {
   distinctFrameworkIdsFromRefs,
   isControlSharedAcrossFrameworks,
+  ROLE_SATISFIES,
   sharedControlsCountForFramework,
   type FrameworkId,
 } from "@grc/types";
 import type { ListControlsResponse } from "@grc/types";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { ControlSidePanel } from "./ControlSidePanel";
+import { statusVariantFromApi } from "@/lib/control-status";
+import { useRole } from "@/features/auth/hooks";
 
 type ControlsListItem = ListControlsResponse["items"][number];
 
@@ -19,26 +23,55 @@ type LibraryFramework = {
   alreadyActivated: boolean;
 };
 
-type ControlDetail = {
-  id: string;
-  name: string;
-  domain: string;
-  status: string;
-  frameworkRefs: string[];
-  requirementDetails: Array<{ frameworkId: FrameworkId; frameworkTitle: string; code: string }>;
-  assignment?: {
-    id: string;
-    assignedTo: string;
-    dueDate: string | null;
-    instruction: string;
-    instructionUpdatedAt: string | null;
-    integrationsUsed: string[];
-  } | null;
-  instructionRegenerated?: boolean;
-};
-
 function frameworkIdsFromRefs(refs: string[]): FrameworkId[] {
   return distinctFrameworkIdsFromRefs(refs);
+}
+
+/** UUID (incl. v7) pattern — used to avoid verbose screen-reader strings for clerk/db ids. */
+const UUID_LIKE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Two-character badge from the end of an alphanumeric owner key (not human initials). */
+function ownerBadgeFromId(value: string): string {
+  const cleaned = value.replace(/[^a-zA-Z0-9]/g, "");
+  const tail = cleaned.slice(-2);
+  return (tail.length > 0 ? tail : "U").toUpperCase();
+}
+
+function ownerSummaryForAria(assignedTo: string): string {
+  if (UUID_LIKE.test(assignedTo)) return "Assigned owner account";
+  if (assignedTo.length > 28) return `Assigned owner, ID ending in ${assignedTo.slice(-6)}`;
+  return `Assigned to ${assignedTo}`;
+}
+
+function ownerFilterAriaLabel(ownerId: string): string {
+  if (UUID_LIKE.test(ownerId)) return "Show controls assigned to this owner account";
+  return `Show controls assigned to ${ownerId}`;
+}
+
+const OWNER_FILTER_PREVIEW = 10;
+
+function formatLastUpdated(value: string | null): { label: string; title?: string } {
+  if (!value) return { label: "Last updated: —" };
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return { label: "Last updated: —" };
+  const diffMs = Math.max(0, Date.now() - d.getTime());
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHr = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHr / 24);
+
+  const rel =
+    diffSec < 60
+      ? "just now"
+      : diffMin < 60
+        ? `${diffMin}m ago`
+        : diffHr < 24
+          ? `${diffHr}h ago`
+          : diffDay < 7
+            ? `${diffDay}d ago`
+            : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+  return { label: `Last updated: ${rel}`, title: d.toISOString() };
 }
 
 async function fetchControls(): Promise<{ items: ControlsListItem[] }> {
@@ -63,32 +96,18 @@ async function fetchLibraryFrameworks(): Promise<LibraryFramework[]> {
   return body.data.frameworks.filter((f) => f.alreadyActivated);
 }
 
-async function fetchControlDetail(id: string): Promise<ControlDetail> {
-  const res = await fetch(`/api/v1/controls/${encodeURIComponent(id)}`, {
-    credentials: "same-origin",
-  });
-  const body = (await res.json()) as { data?: ControlDetail; error?: { message?: string } };
-  if (!res.ok) throw new Error(body.error?.message ?? "Could not load control");
-  if (!body.data) throw new Error("Invalid response");
-  return body.data;
-}
-
 export function ControlLibraryClient() {
+  const role = useRole();
+  const canSubscribeControlHealth =
+    role !== undefined && ROLE_SATISFIES[role].includes("AuditDirector");
+
   const [frameworkScope, setFrameworkScope] = useState<FrameworkId | "all">("all");
   const [statusScope, setStatusScope] = useState<Array<"pass" | "warn" | "fail" | "pending" | "auto">>([]);
   const [ownerScope, setOwnerScope] = useState<"all" | "unassigned" | string>("all");
+  const [showAllOwnerFilters, setShowAllOwnerFilters] = useState(false);
   const [collapsedDomains, setCollapsedDomains] = useState<Record<string, boolean>>({});
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [panelReducedMotion, setPanelReducedMotion] = useState(false);
-  const [assignOpen, setAssignOpen] = useState(false);
-  const [assignOwnerId, setAssignOwnerId] = useState<string>("");
-  const [assignDueDate, setAssignDueDate] = useState<string>("");
-  const closeBtnRef = useRef<HTMLButtonElement>(null);
   const openerRef = useRef<HTMLElement | null>(null);
-  const panelRef = useRef<HTMLElement | null>(null);
-  const assignFirstFieldRef = useRef<HTMLSelectElement>(null);
-  const assignOpenerRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     try {
@@ -136,15 +155,6 @@ export function ControlLibraryClient() {
     }
   }, [collapsedDomains]);
 
-  useEffect(() => {
-    if (typeof window.matchMedia !== "function") return;
-    const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
-    const apply = () => setPanelReducedMotion(mq.matches);
-    apply();
-    mq.addEventListener?.("change", apply);
-    return () => mq.removeEventListener?.("change", apply);
-  }, []);
-
   const libraryQ = useQuery({
     queryKey: ["framework-library"],
     queryFn: fetchLibraryFrameworks,
@@ -158,70 +168,8 @@ export function ControlLibraryClient() {
     },
   });
 
-  const detailQ = useQuery({
-    queryKey: ["control-detail", selectedId],
-    queryFn: () => fetchControlDetail(selectedId!),
-    enabled: selectedId != null,
-  });
-
-  const usersQ = useQuery({
-    queryKey: ["tenant-users", "controlOwners"],
-    queryFn: async () => {
-      const res = await fetch("/api/v1/users?role=ControlOwner&limit=100", {
-        credentials: "same-origin",
-      });
-      const body = (await res.json()) as {
-        data?: Array<{ id: string; name: string | null; email: string; active: boolean; role: string | null }>;
-        error?: { message?: string };
-      };
-      if (!res.ok) throw new Error(body.error?.message ?? "Could not load users");
-      return (body.data ?? []).filter((u) => u.active);
-    },
-    enabled: assignOpen,
-    retry: false,
-  });
-
-
   const activated = libraryQ.data ?? [];
   const multiFramework = activated.length >= 2;
-
-  function statusVariantFromApi(status: string): "pass" | "warn" | "fail" | "pending" | "auto" {
-    const normalized = String(status ?? "").toLowerCase();
-    if (normalized === "pass" || normalized === "passing") return "pass";
-    if (normalized === "warn" || normalized === "warning" || normalized === "attention") return "warn";
-    if (normalized === "fail" || normalized === "failing") return "fail";
-    if (normalized === "auto" || normalized === "auto-monitored") return "auto";
-    return "pending";
-  }
-
-  function initialsForOwner(value: string): string {
-    const cleaned = value.replace(/[^a-zA-Z0-9]/g, "");
-    const tail = cleaned.slice(-2);
-    return (tail.length > 0 ? tail : "U").toUpperCase();
-  }
-
-  function formatLastUpdated(value: string | null): { label: string; title?: string } {
-    if (!value) return { label: "Last updated: —" };
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return { label: "Last updated: —" };
-    const diffMs = Date.now() - d.getTime();
-    const diffSec = Math.floor(diffMs / 1000);
-    const diffMin = Math.floor(diffSec / 60);
-    const diffHr = Math.floor(diffMin / 60);
-    const diffDay = Math.floor(diffHr / 24);
-
-    const rel =
-      diffSec < 60
-        ? "just now"
-        : diffMin < 60
-          ? `${diffMin}m ago`
-          : diffHr < 24
-            ? `${diffHr}h ago`
-            : diffDay < 7
-              ? `${diffDay}d ago`
-              : d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-    return { label: `Last updated: ${rel}`, title: d.toISOString() };
-  }
 
   const filteredItems = useMemo(() => {
     const items = controlsQ.data ?? [];
@@ -249,6 +197,11 @@ export function ControlLibraryClient() {
     return Array.from(set).sort((a, b) => a.localeCompare(b));
   }, [controlsQ.data]);
 
+  const visibleOwners = showAllOwnerFilters
+    ? owners
+    : owners.slice(0, OWNER_FILTER_PREVIEW);
+  const ownerFilterOverflow = owners.length - OWNER_FILTER_PREVIEW;
+
   const grouped = useMemo(() => {
     const stable = [...filteredItems].sort((a, b) => {
       const domainCmp = a.domain.localeCompare(b.domain);
@@ -265,120 +218,57 @@ export function ControlLibraryClient() {
     return Array.from(map.entries()).map(([domain, items]) => ({ domain, items }));
   }, [filteredItems]);
 
-  const refsMatrix = filteredItems.map((r) => r.frameworkRefs);
+  const refsMatrix = useMemo(
+    () => filteredItems.map((r) => r.frameworkRefs),
+    [filteredItems]
+  );
 
   const sharedCount =
     frameworkScope === "all"
       ? refsMatrix.filter((refs) => isControlSharedAcrossFrameworks(refs)).length
       : sharedControlsCountForFramework(frameworkScope, refsMatrix);
 
-  const closePanel = useCallback(() => {
-    if (panelReducedMotion) {
-      setSelectedId(null);
-      return;
-    }
-    setPanelOpen(false);
-    window.setTimeout(() => setSelectedId(null), 200);
-  }, [panelReducedMotion]);
-
-  const onKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePanel();
-      if (e.key !== "Tab") return;
-      const root = panelRef.current;
-      if (!root) return;
-      const focusables = Array.from(
-        root.querySelectorAll<HTMLElement>(
-          'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])'
-        )
-      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
-      if (focusables.length === 0) return;
-      const first = focusables[0]!;
-      const last = focusables[focusables.length - 1]!;
-      const active = document.activeElement as HTMLElement | null;
-      if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      } else if (e.shiftKey && (active === first || active == null)) {
-        e.preventDefault();
-        last.focus();
-      }
-    },
-    [closePanel]
-  );
-
-  useEffect(() => {
-    if (!selectedId) return;
-    setPanelOpen(panelReducedMotion);
-    if (!panelReducedMotion) {
-      // ensure initial render applies translate-x-full before sliding in
-      requestAnimationFrame(() => setPanelOpen(true));
-    }
-    openerRef.current = document.activeElement as HTMLElement | null;
-    document.addEventListener("keydown", onKeyDown);
-    closeBtnRef.current?.focus();
-    setAssignOpen(false);
-    setAssignOwnerId("");
-    setAssignDueDate("");
-    return () => {
-      document.removeEventListener("keydown", onKeyDown);
-      openerRef.current?.focus?.();
-      openerRef.current = null;
+  const frameworkView = frameworkScope !== "all" ? frameworkScope : null;
+  const frameworkProgress = useMemo(() => {
+    if (!frameworkView) return null;
+    const scoped = filteredItems;
+    const counts = {
+      pass: 0,
+      warn: 0,
+      fail: 0,
+      pending: 0,
+      auto: 0,
+      total: 0,
     };
-  }, [selectedId, onKeyDown, panelReducedMotion]);
+    for (const row of scoped) {
+      const v = statusVariantFromApi(row.status);
+      counts.total += 1;
+      counts[v] += 1;
+    }
+    const passing = counts.pass;
+    const pct = counts.total > 0 ? Math.round((passing / counts.total) * 100) : 0;
+    return { ...counts, passing, pct };
+  }, [filteredItems, frameworkView]);
 
   const qc = useQueryClient();
-  const assignControl = useMutation({
-    mutationFn: async () => {
-      const controlId = selectedId;
-      if (!controlId) throw new Error("No control selected");
-      if (!assignOwnerId) throw new Error("Select an owner");
-      const res = await fetch(`/api/v1/controls/${encodeURIComponent(controlId)}/assign`, {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          assignedTo: assignOwnerId,
-          dueDate: assignDueDate ? assignDueDate : null,
-        }),
-      });
-      const body = (await res.json()) as { data?: unknown; error?: { message?: string } };
-      if (!res.ok) throw new Error(body.error?.message ?? "Assignment failed");
-      return body.data as {
-        id: string;
-        assignedTo: string;
-        dueDate: string | null;
-        status: string;
-        instruction: string;
-        instructionUpdatedAt: string;
-        integrationsUsed: string[];
-      };
-    },
-    onSuccess: async () => {
-      await qc.invalidateQueries({ queryKey: ["controls-list"] });
-      await qc.invalidateQueries({ queryKey: ["control-detail", selectedId] });
-      setAssignOpen(false);
-    },
-  });
 
   useEffect(() => {
-    if (!assignOpen) return;
-    requestAnimationFrame(() => assignFirstFieldRef.current?.focus());
-    const onAssignKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        setAssignOpen(false);
-      }
+    if (!canSubscribeControlHealth) return;
+    // SSE for live control health; endpoint requires AuditDirector (or OrgAdmin / PlatformSuperAdmin via ROLE_SATISFIES).
+    const es = new EventSource("/api/v1/stream/control-health");
+    const onUpdate = () => {
+      qc.invalidateQueries({ queryKey: ["controls-list"] }).catch(() => {});
     };
-    document.addEventListener("keydown", onAssignKeyDown);
-    return () => document.removeEventListener("keydown", onAssignKeyDown);
-  }, [assignOpen]);
-
-  useEffect(() => {
-    if (assignOpen) return;
-    assignOpenerRef.current?.focus?.();
-    assignOpenerRef.current = null;
-  }, [assignOpen]);
+    es.addEventListener("control.degraded", onUpdate);
+    es.addEventListener("control.passed", onUpdate);
+    es.addEventListener("message", onUpdate);
+    return () => {
+      es.removeEventListener("control.degraded", onUpdate);
+      es.removeEventListener("control.passed", onUpdate);
+      es.removeEventListener("message", onUpdate);
+      es.close();
+    };
+  }, [qc, canSubscribeControlHealth]);
 
   return (
     <div className="relative">
@@ -409,6 +299,7 @@ export function ControlLibraryClient() {
           <button
             type="button"
             aria-label="Show controls for all frameworks"
+            aria-pressed={frameworkScope === "all"}
             onClick={() => setFrameworkScope("all")}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               frameworkScope === "all"
@@ -423,6 +314,7 @@ export function ControlLibraryClient() {
               key={f.id}
               type="button"
               aria-label={`Show controls mapped to ${f.title}`}
+              aria-pressed={frameworkScope === f.id}
               onClick={() => setFrameworkScope(f.id)}
               className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                 frameworkScope === f.id
@@ -447,6 +339,7 @@ export function ControlLibraryClient() {
               key={v}
               type="button"
               aria-label={`Filter by status ${v}`}
+              aria-pressed={active}
               onClick={() =>
                 setStatusScope((prev) =>
                   active ? prev.filter((x) => x !== v) : [...prev, v]
@@ -469,6 +362,7 @@ export function ControlLibraryClient() {
         <button
           type="button"
           aria-label="Show controls for all owners"
+          aria-pressed={ownerScope === "all"}
           onClick={() => setOwnerScope("all")}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             ownerScope === "all"
@@ -481,6 +375,7 @@ export function ControlLibraryClient() {
         <button
           type="button"
           aria-label="Show unassigned controls"
+          aria-pressed={ownerScope === "unassigned"}
           onClick={() => setOwnerScope("unassigned")}
           className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
             ownerScope === "unassigned"
@@ -490,11 +385,12 @@ export function ControlLibraryClient() {
         >
           Unassigned
         </button>
-        {owners.slice(0, 10).map((id) => (
+        {visibleOwners.map((id) => (
           <button
             key={id}
             type="button"
-            aria-label={`Show controls assigned to ${id}`}
+            aria-label={ownerFilterAriaLabel(id)}
+            aria-pressed={ownerScope === id}
             onClick={() => setOwnerScope(id)}
             className={`rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
               ownerScope === id
@@ -503,18 +399,40 @@ export function ControlLibraryClient() {
             }`}
             title={id}
           >
-            {initialsForOwner(id)}
+            {ownerBadgeFromId(id)}
           </button>
         ))}
+        {ownerFilterOverflow > 0 && !showAllOwnerFilters ? (
+          <button
+            type="button"
+            className="text-foreground-secondary hover:text-foreground border-border rounded-lg border bg-card px-3 py-1.5 text-sm"
+            aria-label={`Show ${ownerFilterOverflow} more owners from this list`}
+            onClick={() => setShowAllOwnerFilters(true)}
+          >
+            +{ownerFilterOverflow} more
+          </button>
+        ) : null}
+        {owners.length > OWNER_FILTER_PREVIEW && showAllOwnerFilters ? (
+          <button
+            type="button"
+            className="text-foreground-secondary hover:text-foreground text-sm underline"
+            aria-label="Show fewer owner filters"
+            onClick={() => setShowAllOwnerFilters(false)}
+          >
+            Show fewer
+          </button>
+        ) : null}
 
         {(frameworkScope !== "all" || statusScope.length > 0 || ownerScope !== "all") && (
           <button
             type="button"
+            aria-label="Clear all filters"
             className="text-foreground-secondary hover:text-foreground ml-2 text-sm underline"
             onClick={() => {
               setFrameworkScope("all");
               setStatusScope([]);
               setOwnerScope("all");
+              setShowAllOwnerFilters(false);
             }}
           >
             Clear all
@@ -529,6 +447,46 @@ export function ControlLibraryClient() {
             {frameworkScope === "all" ? "" : ` (${frameworkScope})`}: {sharedCount}
           </span>
         </p>
+      )}
+
+      {frameworkProgress && (
+        <section className="border-border bg-card/60 mb-4 rounded-xl border p-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-foreground text-sm font-semibold">Framework progress</h2>
+              <p className="text-foreground-secondary mt-1 text-xs">
+                Passing controls / total controls
+              </p>
+            </div>
+            <div className="text-foreground tabular-nums text-sm font-semibold" aria-label="Completion percentage">
+              {frameworkProgress.pct}%
+            </div>
+          </div>
+
+          <div className="bg-surface-overlay mt-3 h-2 w-full rounded-full" aria-label="Completion progress bar">
+            <div
+              className="bg-accent h-2 rounded-full"
+              style={{ width: `${Math.max(0, Math.min(100, frameworkProgress.pct))}%` }}
+            />
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
+            <div className="text-foreground-secondary">
+              <span className="text-foreground font-medium">Passing</span>: {frameworkProgress.pass}
+            </div>
+            <div className="text-foreground-secondary">
+              <span className="text-foreground font-medium">Needs attention</span>:{" "}
+              {frameworkProgress.warn}
+            </div>
+            <div className="text-foreground-secondary">
+              <span className="text-foreground font-medium">Failing</span>: {frameworkProgress.fail}
+            </div>
+            <div className="text-foreground-secondary">
+              <span className="text-foreground font-medium">Pending</span>:{" "}
+              {frameworkProgress.pending}
+            </div>
+          </div>
+        </section>
       )}
 
       <div className="flex flex-col gap-4">
@@ -576,7 +534,7 @@ export function ControlLibraryClient() {
                               ? "Auto-monitored"
                               : "Pending";
                     const ownerLabel = row.assignedTo
-                      ? `Assigned to ${row.assignedTo}`
+                      ? ownerSummaryForAria(row.assignedTo)
                       : "Unassigned";
                     const rowAriaLabel = `${row.name}. Status: ${statusLabel}. ${ownerLabel}. ${updated.label}. Open details.`;
                     return (
@@ -584,7 +542,10 @@ export function ControlLibraryClient() {
                         <button
                           type="button"
                           aria-label={rowAriaLabel}
-                          onClick={() => setSelectedId(row.id)}
+                          onClick={() => {
+                            openerRef.current = document.activeElement as HTMLElement | null;
+                            setSelectedId(row.id);
+                          }}
                           className="border-border bg-card hover:bg-surface-overlay/80 w-full rounded-xl border px-4 py-3 text-left transition-colors"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -607,10 +568,10 @@ export function ControlLibraryClient() {
                               {row.assignedTo ? (
                                 <span
                                   className="bg-surface-overlay text-foreground inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
-                                  aria-label={`Assigned owner: ${row.assignedTo}`}
+                                  aria-label={ownerSummaryForAria(row.assignedTo)}
                                   title={row.assignedTo}
                                 >
-                                  {initialsForOwner(row.assignedTo)}
+                                  {ownerBadgeFromId(row.assignedTo)}
                                 </span>
                               ) : (
                                 <span
@@ -649,212 +610,12 @@ export function ControlLibraryClient() {
       )}
 
       {selectedId && (
-        <>
-          <button
-            type="button"
-            aria-label="Close panel"
-            className="fixed inset-0 z-40 bg-black/50"
-            onClick={closePanel}
-          />
-          <aside
-            ref={(el) => {
-              panelRef.current = el;
-            }}
-            className={`border-border bg-surface-elevated fixed top-0 right-0 z-50 flex h-full w-full max-w-[400px] flex-col border-l shadow-xl ${
-              panelReducedMotion
-                ? "translate-x-0"
-                : `transform transition-transform duration-200 ease-out ${
-                    panelOpen ? "translate-x-0" : "translate-x-full"
-                  }`
-            }`}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="control-panel-title"
-          >
-            <div className="border-border flex items-start justify-between border-b px-4 py-3">
-              <h2 id="control-panel-title" className="text-foreground pr-2 text-lg font-semibold">
-                {detailQ.data?.name ?? "Control"}
-              </h2>
-              <button
-                ref={closeBtnRef}
-                type="button"
-                className="text-foreground-secondary hover:text-foreground text-sm underline"
-                onClick={closePanel}
-              >
-                Close
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto px-4 py-4">
-              {detailQ.isLoading && (
-                <p className="text-foreground-secondary text-sm">Loading details…</p>
-              )}
-              {detailQ.isError && (
-                <p className="text-status-fail text-sm" role="alert">
-                  {(detailQ.error as Error).message}
-                </p>
-              )}
-              {detailQ.data && (
-                <>
-                  <p className="text-foreground-secondary text-sm">{detailQ.data.domain}</p>
-                  <p className="text-foreground-secondary mt-1 text-xs">Status: {detailQ.data.status}</p>
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className="bg-accent text-background rounded-lg px-3 py-1.5 text-sm font-medium"
-                      onClick={() => {
-                        assignOpenerRef.current = document.activeElement as HTMLElement | null;
-                        setAssignOpen(true);
-                      }}
-                    >
-                      Assign
-                    </button>
-                    {detailQ.data.assignment?.assignedTo ? (
-                      <span className="text-foreground-secondary text-xs">
-                        Assigned to: {detailQ.data.assignment.assignedTo}
-                      </span>
-                    ) : null}
-                    {detailQ.data.instructionRegenerated ? (
-                      <span className="text-foreground-secondary text-xs">
-                        Instructions updated for current integrations
-                      </span>
-                    ) : null}
-                  </div>
-                  <h3 className="text-foreground mt-6 text-sm font-semibold">Framework requirements</h3>
-                  <ul className="mt-2 space-y-3">
-                    {detailQ.data.requirementDetails.map((r) => (
-                      <li key={`${r.frameworkId}-${r.code}`} className="flex flex-wrap items-center gap-2">
-                        <FrameworkBadge framework={r.frameworkId} size="sm" />
-                        <span className="text-foreground font-mono text-sm">{r.code}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="text-foreground-secondary mt-6 text-sm leading-relaxed">
-                    One evidence upload for this control satisfies every requirement listed above —
-                    they share a single control record in your library.
-                  </p>
-                </>
-              )}
-            </div>
-          </aside>
-
-          {assignOpen && (
-            <>
-              <button
-                type="button"
-                aria-label="Close assignment modal"
-                className="fixed inset-0 z-[60] bg-black/50"
-                onClick={() => setAssignOpen(false)}
-              />
-              <div
-                role="dialog"
-                aria-modal="true"
-                aria-label="Assign control"
-                className="border-border bg-surface-elevated fixed left-1/2 top-1/2 z-[70] w-[92vw] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border p-4 shadow-xl"
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <h3 className="text-foreground text-base font-semibold">Assign control</h3>
-                    <p className="text-foreground-secondary mt-1 text-sm">
-                      Select an owner and optional due date. Instructions are generated using connected integrations.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="text-foreground-secondary hover:text-foreground text-sm underline"
-                    onClick={() => setAssignOpen(false)}
-                  >
-                    Close
-                  </button>
-                </div>
-
-                <div className="mt-4 space-y-4">
-                  <div>
-                    <label
-                      htmlFor="assign-owner"
-                      className="text-foreground-secondary block text-xs font-medium uppercase tracking-wide"
-                    >
-                      Owner
-                    </label>
-                    <select
-                      id="assign-owner"
-                      ref={assignFirstFieldRef}
-                      className="border-border bg-card text-foreground mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-                      value={assignOwnerId}
-                      onChange={(e) => setAssignOwnerId(e.target.value)}
-                    >
-                      <option value="">Select an owner…</option>
-                      {(usersQ.data ?? []).map((u) => (
-                        <option key={u.id} value={u.id}>
-                          {u.name ? `${u.name} (${u.email})` : u.email}
-                        </option>
-                      ))}
-                    </select>
-                    {usersQ.isLoading ? (
-                      <p className="text-foreground-secondary mt-2 text-xs">Loading users…</p>
-                    ) : null}
-                    {usersQ.isError ? (
-                      <p className="text-status-fail mt-2 text-xs" role="alert">
-                        {(usersQ.error as Error).message}
-                      </p>
-                    ) : null}
-                  </div>
-
-                  <div>
-                    <label
-                      htmlFor="assign-due-date"
-                      className="text-foreground-secondary block text-xs font-medium uppercase tracking-wide"
-                    >
-                      Due date (optional)
-                    </label>
-                    <input
-                      id="assign-due-date"
-                      type="date"
-                      className="border-border bg-card text-foreground mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-                      value={assignDueDate}
-                      onChange={(e) => setAssignDueDate(e.target.value)}
-                    />
-                  </div>
-
-                  <div>
-                    <p className="text-foreground-secondary text-xs font-medium uppercase tracking-wide">
-                      Connected integrations
-                    </p>
-                    <p className="text-foreground-secondary mt-2 text-sm">
-                      {detailQ.data?.assignment?.integrationsUsed?.length
-                        ? detailQ.data.assignment.integrationsUsed.join(", ")
-                        : "Will be detected at assignment time"}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center justify-end gap-2">
-                    <button
-                      type="button"
-                      className="border-border text-foreground rounded-lg border px-4 py-2 text-sm font-medium"
-                      onClick={() => setAssignOpen(false)}
-                      disabled={assignControl.isPending}
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      className="bg-accent text-background rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-                      disabled={assignControl.isPending || !assignOwnerId}
-                      onClick={() => assignControl.mutate()}
-                    >
-                      {assignControl.isPending ? "Saving…" : "Save assignment"}
-                    </button>
-                  </div>
-
-                  {assignControl.error ? (
-                    <p className="text-status-fail text-xs" role="alert">
-                      {(assignControl.error as Error).message}
-                    </p>
-                  ) : null}
-                </div>
-              </div>
-            </>
-          )}
-        </>
+        <ControlSidePanel
+          controlId={selectedId}
+          openerRef={openerRef}
+          onDismiss={() => setSelectedId(null)}
+          showAssign
+        />
       )}
     </div>
   );

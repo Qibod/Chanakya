@@ -28,6 +28,7 @@ interface NavItem {
 const FULL_NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
   { href: "/controls", label: "Controls", icon: <Shield size={18} /> },
+  { href: "/gaps", label: "Gaps", icon: <CheckSquare size={18} /> },
   { href: "/evidence", label: "Evidence", icon: <FileCheck size={18} /> },
   { href: "/audits", label: "Audits", icon: <ClipboardList size={18} /> },
   { href: "/risk", label: "Risk", icon: <AlertTriangle size={18} /> },

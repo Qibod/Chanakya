@@ -144,6 +144,10 @@ CREATE TABLE evidence_blobs (
     CONSTRAINT evidence_blobs_content_hash UNIQUE (content_hash)
 );
 
+-- Append-only enforcement — blob rows are insert-only (Story 4.1)
+REVOKE UPDATE, DELETE ON evidence_blobs FROM PUBLIC;
+GRANT SELECT, INSERT ON evidence_blobs TO app_role;
+
 -- ---------------------------------------------------------------------------
 -- 9. evidence_items — mutable metadata; BU-scoped (ARCH-5)
 -- ---------------------------------------------------------------------------
@@ -159,6 +163,19 @@ CREATE TABLE evidence_items (
     business_unit_id TEXT,                  -- nullable, ARCH-5
     created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT evidence_items_pkey PRIMARY KEY (id)
+);
+
+-- ---------------------------------------------------------------------------
+-- 10. control_owner_task_completions — lightweight completion marker for D4 view (Story 3.4)
+-- ---------------------------------------------------------------------------
+CREATE TABLE control_owner_task_completions (
+    id              TEXT        NOT NULL DEFAULT gen_random_uuid()::text,
+    assignment_id    TEXT        NOT NULL REFERENCES control_assignments(id) ON DELETE CASCADE,
+    evidence_item_id TEXT        NOT NULL REFERENCES evidence_items(id),
+    completed_by     TEXT        NOT NULL REFERENCES users(id),
+    completed_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT control_owner_task_completions_pkey PRIMARY KEY (id),
+    CONSTRAINT control_owner_task_completions_assignment_unique UNIQUE (assignment_id)
 );
 
 -- ---------------------------------------------------------------------------

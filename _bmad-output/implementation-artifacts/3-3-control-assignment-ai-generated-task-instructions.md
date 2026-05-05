@@ -155,6 +155,15 @@ so that control owners know exactly what to do without requiring training or fol
   - saving calls endpoint and updates UI to show assigned owner (and ideally status change)
   - a11y smoke: modal has role dialog, focus lands in modal, Escape closes and returns focus correctly
 
+### Review Findings
+
+- [ ] [Review][Patch] Concurrent assignment race — two simultaneous `POST /v1/controls/:id/assign` calls can each mark `is_current=FALSE` and insert a new `is_current=TRUE` row before the unique partial index fires, producing an unhandled 500. Fix: wrap the `$transaction` in a `try/catch` for `isPostgresUniqueViolation` and return 409 `CONFLICT`. [`apps/api/src/routes/v1/frameworks.ts:702-743`]
+- [ ] [Review][Patch] `new VertexAIProvider()` instantiated per-request in assignment handler — creates a new gRPC channel per assignment. Hoist to module level (consistent with `my-tasks.ts`). [`apps/api/src/routes/v1/frameworks.ts:681`]
+- [ ] [Review][Patch] `fallbackInstruction` is duplicated — identical function exists in `packages/ai/src/task-instructions.ts` and `apps/api/src/routes/v1/frameworks.ts`. Remove the copy in `frameworks.ts` and export + import from `@grc/ai`. [`apps/api/src/routes/v1/frameworks.ts:32-48`]
+- [ ] [Review][Patch] Assignment response `id` field is the control ID, not the new assignment record's ID — callers cannot reference the specific assignment. Fix: query the inserted assignment ID (e.g., add `RETURNING id` to the INSERT) and return it as `assignmentId` in the response, keeping `controlId` for the control reference. [`apps/api/src/routes/v1/frameworks.ts:745-755`]
+- [x] [Review][Defer] `instructionModel` hardcoded as `"claude-sonnet-4-6"` while using `VertexAIProvider` — if Claude models are routed via Vertex AI this is intentional; document with a comment or extract to a named constant. Track for review when provider changes.
+- [x] [Review][Defer] `GET /v1/controls/:id` triggers AI regeneration for `ControlOwner` role — unexpected write side-effect on a read endpoint callable by ControlOwner. Consider restricting regeneration to AuditDirector callers (`actorId` check or role check) to avoid ControlOwner-triggered AI spend.
+
 ## Dev Notes
 
 ### What exists today (read before changing anything)

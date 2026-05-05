@@ -1,6 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { MyTasksClient } from "@/features/tasks/MyTasksClient";
 
 async function getCurrentRole(): Promise<string | null> {
   const headersList = await headers();
@@ -28,9 +29,6 @@ export default async function MyTasksPage() {
   if (role !== "ControlOwner") redirect("/dashboard");
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold text-slate-100">My Tasks</h1>
-      <p className="mt-2 text-slate-400">Full implementation in Story 3.4</p>
-    </div>
+    <MyTasksClient />
   );
 }

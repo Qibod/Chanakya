@@ -2,12 +2,12 @@
  * Integration tests: cross-tenant isolation and audit log permission enforcement.
  * Requires a running PostgreSQL instance (docker compose up -d).
  *
- * Skipped automatically when DATABASE_URL is not set.
+ * Skipped automatically unless RUN_DB_INTEGRATION=true.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { prisma, provisionTenantSchema, tenantSchemaName, createTenantClient } from "@grc/db";
 
-const hasDb = Boolean(process.env["DATABASE_URL"]);
+const hasDb = Boolean(process.env["DATABASE_URL"]) && process.env["RUN_DB_INTEGRATION"] === "true";
 
 const describeWithDb = hasDb ? describe : describe.skip;
 
@@ -32,7 +32,7 @@ describeWithDb("cross-tenant isolation (requires local DB)", () => {
     await prisma.$disconnect();
   });
 
-  it("provisionTenantSchema creates all 14 expected tables", async () => {
+  it("provisionTenantSchema creates all 16 expected tables", async () => {
     const schema = tenantSchemaName(TENANT_A);
     const tables = await prisma.$queryRaw<Array<{ table_name: string }>>`
       SELECT table_name
@@ -44,8 +44,10 @@ describeWithDb("cross-tenant isolation (requires local DB)", () => {
     const expected = [
       "audit_access_tokens",
       "audit_engagements",
+      "control_assignments",
       "control_health_snapshots",
       "control_items",
+      "control_owner_task_completions",
       "evidence_blobs",
       "evidence_items",
       "findings",
@@ -160,6 +162,22 @@ describeWithDb("cross-tenant isolation (requires local DB)", () => {
       SELECT DISTINCT privilege_type
       FROM information_schema.role_table_grants
       WHERE table_name = 'control_health_snapshots'
+        AND table_schema = ${schema}
+        AND grantee = 'PUBLIC'
+    `;
+    const types = grants.map((g) => g.privilege_type);
+    expect(types).not.toContain("UPDATE");
+    expect(types).not.toContain("DELETE");
+    expect(types).toContain("INSERT");
+    expect(types).toContain("SELECT");
+  });
+
+  it("evidence_blobs has REVOKE UPDATE/DELETE — append-only enforced in policy (Story 4.1)", async () => {
+    const schema = tenantSchemaName(TENANT_A);
+    const grants = await prisma.$queryRaw<Array<{ privilege_type: string }>>`
+      SELECT DISTINCT privilege_type
+      FROM information_schema.role_table_grants
+      WHERE table_name = 'evidence_blobs'
         AND table_schema = ${schema}
         AND grantee = 'PUBLIC'
     `;

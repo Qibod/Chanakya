@@ -39,6 +39,7 @@ vi.mock("@grc/ai", () => ({
   },
   generateTaskInstructions: async (_provider: unknown, _input: unknown) =>
     "1. Do the thing.\n2. Confirm the thing.\n\nReferences:\n- SOC2:CC6.1",
+  fallbackInstruction: (controlName: string) => `Complete the assigned control: ${controlName}.`,
 }));
 
 import { prisma } from "@grc/db";
@@ -632,6 +633,8 @@ describe("POST /v1/controls/:id/assign", () => {
     const body = JSON.parse(res.body) as {
       data: {
         id: string;
+        controlId: string;
+        assignmentId: string;
         assignedTo: string;
         dueDate: string | null;
         status: string;
@@ -640,6 +643,10 @@ describe("POST /v1/controls/:id/assign", () => {
       };
     };
     expect(body.data.id).toBe("a");
+    expect(body.data.controlId).toBe("a");
+    expect(body.data.assignmentId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+    );
     expect(body.data.assignedTo).toBe("user_2");
     expect(body.data.dueDate).toBe("2026-06-01");
     expect(body.data.status).toBe("in_review");
@@ -658,6 +665,37 @@ describe("POST /v1/controls/:id/assign", () => {
       })
     );
 
+    await app.close();
+  });
+
+  it("returns 409 when unique constraint fails on concurrent assignment", async () => {
+    vi.mocked(prisma.$queryRawUnsafe)
+      .mockResolvedValueOnce([{ provider: "okta" }] as never)
+      .mockResolvedValueOnce([{ id: "user_2" }] as never)
+      .mockResolvedValueOnce(
+        [
+          {
+            id: "a",
+            canonical_id: "c1",
+            name: "Logical access",
+            domain: "Access Control",
+            framework_refs: ["SOC2:CC6.1"],
+          },
+        ] as never
+      );
+    vi.mocked(prisma.$transaction).mockRejectedValueOnce(
+      Object.assign(new Error("unique violation"), { code: "23505" })
+    );
+
+    const app = buildApp("AuditDirector");
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/controls/a/assign",
+      payload: { assignedTo: "user_2" },
+    });
+    expect(res.statusCode).toBe(409);
+    const body = JSON.parse(res.body) as { error: { code?: string } };
+    expect(body.error.code).toBe("ASSIGNMENT_CONFLICT");
     await app.close();
   });
 });

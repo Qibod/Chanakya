@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { v7 as uuidv7 } from "uuid";
 import { prisma } from "@grc/db";
-import { VertexAIProvider, generateTaskInstructions } from "@grc/ai";
+import { VertexAIProvider, fallbackInstruction, generateTaskInstructions } from "@grc/ai";
 import {
   computeIncrementalCoverage,
   computeOverlapPercent,
@@ -29,24 +29,6 @@ import { finalizeDismissIfComplete } from "../../services/onboarding-progress.js
 const frameworksPreHandlers = [requireTier("starter"), requireRole("ControlOwner")];
 const assignPreHandlers = [requireTier("starter"), requireRole("AuditDirector")];
 
-function fallbackInstruction(controlName: string): string {
-  return [
-    `Complete the assigned control: ${controlName}.`,
-    "",
-    "What you'll need:",
-    "- Access to the relevant system(s)",
-    "- Any existing policy or checklist your team uses",
-    "",
-    "Steps:",
-    "1. Review what the control is asking for in plain terms (who/what/when).",
-    "2. In the relevant system(s), confirm the current state matches what’s expected.",
-    "3. Capture evidence (screenshot/export/log) for the current period.",
-    "4. If something is missing, fix it or flag it to the Audit Director with what’s needed.",
-    "5. Upload/attach the evidence to the control task.",
-    "6. Mark the task complete.",
-  ].join("\n");
-}
-
 /** Postgres 23505 / Prisma P2002 — concurrent activation or duplicate framework insert. */
 function isPostgresUniqueViolation(err: unknown): boolean {
   if (typeof err === "object" && err !== null) {
@@ -57,6 +39,8 @@ function isPostgresUniqueViolation(err: unknown): boolean {
 }
 
 export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
+  const taskInstructionAi = new VertexAIProvider();
+
   fastify.get(
     "/v1/frameworks/library",
     { preHandler: frameworksPreHandlers },
@@ -430,8 +414,7 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
         if (changed) {
           let newInstruction = "";
           try {
-            const ai = new VertexAIProvider();
-            newInstruction = await generateTaskInstructions(ai, {
+            newInstruction = await generateTaskInstructions(taskInstructionAi, {
               controlName: row.name,
               domain: row.domain,
               frameworkRefs,
@@ -678,8 +661,7 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
       let instruction = "";
       let instructionModel = "claude-sonnet-4-6";
       try {
-        const ai = new VertexAIProvider();
-        instruction = await generateTaskInstructions(ai, {
+        instruction = await generateTaskInstructions(taskInstructionAi, {
           controlName: control.name,
           domain: control.domain,
           frameworkRefs,
@@ -699,52 +681,69 @@ export async function frameworkRoutes(fastify: FastifyInstance): Promise<void> {
         frameworkRefs,
       };
 
-      await prisma.$transaction(async (tx) => {
-        await tx.$executeRawUnsafe(
-          `UPDATE "${schema}".control_items
-           SET assigned_to = $1, status = 'in_review', updated_at = NOW()
-           WHERE id = $2`,
-          assignedTo,
-          id
-        );
+      const assignmentId = uuidv7();
 
-        // Preserve history: mark previous "current" assignment as non-current, then insert new row.
-        await tx.$executeRawUnsafe(
-          `UPDATE "${schema}".control_assignments
-           SET is_current = FALSE
-           WHERE control_item_id = $1 AND is_current = TRUE`,
-          id
-        );
+      try {
+        await prisma.$transaction(async (tx) => {
+          await tx.$executeRawUnsafe(
+            `UPDATE "${schema}".control_items
+             SET assigned_to = $1, status = 'in_review', updated_at = NOW()
+             WHERE id = $2`,
+            assignedTo,
+            id
+          );
 
-        await tx.$executeRawUnsafe(
-          `INSERT INTO "${schema}".control_assignments
+          // Preserve history: mark previous "current" assignment as non-current, then insert new row.
+          await tx.$executeRawUnsafe(
+            `UPDATE "${schema}".control_assignments
+             SET is_current = FALSE
+             WHERE control_item_id = $1 AND is_current = TRUE`,
+            id
+          );
+
+          await tx.$executeRawUnsafe(
+            `INSERT INTO "${schema}".control_assignments
             (id, control_item_id, assigned_to, assigned_by, due_date, instruction, instruction_model, instruction_context, instruction_updated_at, is_current, business_unit_id, created_at)
            VALUES ($1, $2, $3, $4, $5::date, $6, $7, $8::jsonb, NOW(), TRUE, NULL, NOW())`,
-          uuidv7(),
-          id,
-          assignedTo,
-          userId,
-          dueDate,
-          instruction,
-          instructionModel,
-          JSON.stringify(instructionContext)
-        );
+            assignmentId,
+            id,
+            assignedTo,
+            userId,
+            dueDate,
+            instruction,
+            instructionModel,
+            JSON.stringify(instructionContext)
+          );
 
-        await tx.platformAuditLog.create({
-          data: {
-            tenantId,
-            actorId: userId,
-            action: "control.assigned",
-            resourceType: "control_item",
-            resourceId: id,
-            ipAddress: ipAddress ?? null,
-          },
+          await tx.platformAuditLog.create({
+            data: {
+              tenantId,
+              actorId: userId,
+              action: "control.assigned",
+              resourceType: "control_item",
+              resourceId: id,
+              ipAddress: ipAddress ?? null,
+            },
+          });
         });
-      });
+      } catch (err) {
+        if (isPostgresUniqueViolation(err)) {
+          return reply.code(409).send({
+            error: {
+              code: "ASSIGNMENT_CONFLICT",
+              message: "Another assignment was saved for this control; refresh and try again.",
+            },
+          });
+        }
+        throw err;
+      }
 
       return reply.send({
         data: {
+          /** Control item id (same as URL `:id`). Prefer `controlId` for clarity. */
           id,
+          controlId: id,
+          assignmentId,
           assignedTo,
           dueDate,
           status: "in_review",

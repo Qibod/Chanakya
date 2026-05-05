@@ -78,6 +78,15 @@ so that I can scan my compliance posture at a glance and know where to focus.
     - Escape closes panel and restores focus (use `@testing-library/user-event` focus assertions)
   - [x] Add API test coverage in `apps/api` if a test harness exists for routes; otherwise add focused unit coverage where feasible.
 
+### Review Findings
+
+- [ ] [Review][Patch] SSE subscription open for AuditDirector-only endpoint causes 403 flood for ControlOwner sessions — `ControlLibraryClient` unconditionally opens `EventSource('/api/v1/stream/control-health')` but the stream endpoint is gated at `AuditDirector`. A `ControlOwner` on `/controls` will trigger repeated reconnect loops. Fix: conditionally mount SSE only for AuditDirector role (check user role before opening EventSource).
+- [ ] [Review][Patch] `formatLastUpdated` does not guard against negative `diffMs` — if `updated_at` is in the future (server NTP drift), labels like "-1m ago" are shown. Fix: add `if (diffMs < 0) return { label: 'just now' }` guard.
+- [ ] [Review][Patch] Owner filter silently caps at 10 buttons — tenants with >10 distinct owners cannot filter by the 11th+. Fix: add a "Show more" toggle or an owner search/select input when `owners.length > 10`.
+- [ ] [Review][Patch] `initialsForOwner` is misnamed — it returns the tail 2 alphanumeric chars of a user ID, not initials from a name. Rename to `displayCharsForOwner` and note in comment that owner names are not yet available from API.
+- [x] [Review][Defer] `frameworkProgress` block ignores active status/owner filters — pass-rate shown in the progress card reflects all controls under the framework, not the filtered subset. Pre-existing data shape limitation; deferred.
+- [x] [Review][Defer] "Clear all" button has no explicit `aria-label` — text content is technically accessible but could be more descriptive. Low severity; deferred.
+
 ## Dev Notes
 
 ### What exists today (read this before changing anything)

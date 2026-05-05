@@ -8,7 +8,7 @@ export type TaskInstructionsInput = {
   connectedIntegrations: string[];
 };
 
-function fallbackInstruction(controlName: string): string {
+export function fallbackInstruction(controlName: string): string {
   return [
     `Complete the assigned control: ${controlName}.`,
     "",
@@ -32,6 +32,7 @@ export async function generateTaskInstructions(
 ): Promise<string> {
   try {
     const resp = await provider.complete({
+      /** Anthropic Claude via Vertex AI (`VertexAIProvider`); id matches Vertex model publisher naming. */
       model: "claude-sonnet-4-6",
       messages: [{ role: "user", content: buildTaskInstructionsPrompt(input) }],
       maxTokens: 700,
