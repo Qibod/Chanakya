@@ -35,6 +35,20 @@ jobs:
       - name: Install Vercel CLI
         run: npm install -g vercel@latest
 
+      - name: Ensure INTERNAL_API_URL is set in Vercel
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          API_URL="https://grc-api-staging-641269528478.us-central1.run.app"
+          # Upsert the env var for both production and preview — ignore errors if it already exists
+          for target in production preview; do
+            curl -sf -X POST "https://api.vercel.com/v10/projects/${VERCEL_PROJECT_ID}/env" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+              -H "Content-Type: application/json" \
+              -d "{\"key\":\"INTERNAL_API_URL\",\"value\":\"${API_URL}\",\"type\":\"plain\",\"target\":[\"${target}\"]}" \
+              || true
+          done
+
       - name: Deploy to Vercel
         id: deploy
         run: |
