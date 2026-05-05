@@ -42,7 +42,6 @@ jobs:
             --token=${{ secrets.VERCEL_TOKEN }} \
             --yes)
           echo "url=$url" >> $GITHUB_OUTPUT
-        working-directory: apps/web
 
       - name: Comment preview URL on PR
         if: github.event_name == 'pull_request'
