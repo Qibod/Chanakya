@@ -7,7 +7,7 @@
     "./client": "./src/client.ts"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "lint": "eslint src/",
     "type-check": "tsc --noEmit",
     "test": "vitest run",
